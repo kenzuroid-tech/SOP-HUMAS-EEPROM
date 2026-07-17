@@ -3545,6 +3545,39 @@ input[type="range"]::-webkit-slider-thumb {
 .gap-2 { gap: 8px; }
 .gap-4 { gap: 16px; }
 
+.mobile-brand-header {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 28px;
+}
+
+.mobile-brand-logo {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 12px;
+}
+
+.mobile-brand-logo svg {
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(108, 99, 255, 0.35);
+}
+
+.mobile-brand-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: white;
+}
+
+.mobile-brand-title span {
+    background: linear-gradient(135deg, var(--primary-light), var(--accent-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
 /* ============================================================
    RESPONSIVE
    ============================================================ */
@@ -3580,6 +3613,10 @@ input[type="range"]::-webkit-slider-thumb {
     .login-form-panel {
         width: 100%;
         border-left: none;
+    }
+
+    .mobile-brand-header {
+        display: flex;
     }
     
     .settings-layout { grid-template-columns: 1fr; }
@@ -3643,6 +3680,34 @@ input[type="range"]::-webkit-slider-thumb {
     .modal { margin: 12px; }
     
     .toast-container { left: 16px; right: 16px; bottom: 16px; }
+
+    /* Mobile Header & Profile Dropdown Optimizations */
+    .notification-dropdown {
+        width: 320px;
+        max-width: 92vw;
+        right: -60px;
+    }
+    .user-dropdown {
+        width: 250px;
+        max-width: 92vw;
+    }
+    .user-info-header {
+        display: none;
+    }
+    .user-menu-btn {
+        padding: 4px;
+        background: transparent;
+        border-color: transparent;
+    }
+    .user-menu-btn i[data-lucide="chevron-down"] {
+        display: none;
+    }
+    
+    /* Elegant Sidebar Mobile State */
+    .sidebar {
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
+    }
 }
 
 @media (max-width: 480px) {
