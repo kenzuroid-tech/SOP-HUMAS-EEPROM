@@ -7,9 +7,14 @@
     <meta name="theme-color" content="#6C63FF">
     <title>Login — EEPROM Humas Management System</title>
     
+    <!-- PWA Manifest & Icons -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="/images/eeprom no bg.png">
+    
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- Lucide Icons -->
@@ -21,6 +26,15 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="login-page">
+    
+    <!-- Splash Screen -->
+    <div id="splash-screen" class="splash-screen">
+        <div class="splash-content">
+            <img src="/images/eeprom no bg.png" alt="EEPROM Logo" class="splash-logo">
+            <div class="splash-spinner"></div>
+            <h1 class="splash-title">SOP HUMAS <span>EEPROM</span></h1>
+        </div>
+    </div>
     
     <!-- Animated Background -->
     <div class="login-bg">
@@ -205,7 +219,22 @@
         import { login, checkSession } from './js/auth.js';
         import { initSupabase } from './js/auth.js';
         import { APP_CONFIG } from './js/config.js';
+        import { initPWA } from './js/pwa.js';
         
+        // Init PWA
+        initPWA();
+        
+        // Remove Splash Screen after load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const splash = document.getElementById('splash-screen');
+                if (splash) {
+                    splash.style.opacity = '0';
+                    setTimeout(() => splash.remove(), 500);
+                }
+            }, 800);
+        });
+
         // Init
         initSupabase();
         lucide.createIcons();

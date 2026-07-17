@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline — EEPROM Humas Management System</title>
+    <meta name="theme-color" content="#6C63FF">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+        .offline-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 20px;
+        }
+        .offline-icon {
+            width: 80px;
+            height: 80px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+        .offline-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text);
+        }
+        .offline-text {
+            color: var(--text-faint);
+            margin-bottom: 20px;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body class="app-body">
+    <div class="app-layout" id="app-layout">
+        <!-- Sidebar Shell (Offline) -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo">
+                    <img src="./images/eeprom no bg.png" alt="EEPROM Logo" style="width:32px; height:32px; object-fit:contain;">
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">EEPROM</span>
+                    <span class="brand-sub">Humas System</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#"><span class="nav-icon"><i data-lucide="wifi-off"></i></span><span class="nav-label">Offline Mode</span></a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <div class="main-wrapper" id="main-wrapper">
+            <header id="app-header" class="app-header">
+                <div class="header-left">
+                    <div class="breadcrumb">
+                        <span id="page-title">Tidak Ada Koneksi Internet</span>
+                    </div>
+                </div>
+            </header>
+
+            <main id="main-content" class="main-content">
+                <div class="offline-container">
+                    <i data-lucide="wifi-off" class="offline-icon"></i>
+                    <h2 class="offline-title">Anda Sedang Offline</h2>
+                    <p class="offline-text">Aplikasi tetap dapat diakses sebagian, namun koneksi internet diperlukan untuk mengambil atau memperbarui data dari server.</p>
+                    <button class="btn btn-primary" onclick="window.location.reload()">
+                        <i data-lucide="refresh-cw"></i> Coba Lagi
+                    </button>
+                </div>
+            </main>
+        </div>
+    </div>
+    <script>
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
