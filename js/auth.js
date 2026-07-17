@@ -133,7 +133,7 @@ export async function logout() {
         hideLoading();
         
         // Redirect to login
-        window.location.href = '/index.html';
+        window.location.href = './index.html';
     } catch (error) {
         hideLoading();
         toast.error('Gagal keluar. Silakan coba lagi.');

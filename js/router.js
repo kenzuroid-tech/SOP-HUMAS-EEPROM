@@ -76,7 +76,7 @@ export async function navigate(path, pushState = true) {
     // Check authentication
     const isAuth = store.get('isAuthenticated');
     if (!isAuth) {
-        window.location.href = '/index.html';
+        window.location.href = './index.html';
         return;
     }
     
