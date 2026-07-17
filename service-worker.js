@@ -1,21 +1,21 @@
 const CACHE_NAME = 'she-cache-v1';
 
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/app.html',
-  '/offline.html',
-  '/style.css',
-  '/manifest.json',
-  '/images/eeprom no bg.png',
-  '/js/pwa.js',
-  '/js/auth.js',
-  '/js/config.js',
-  '/js/router.js',
-  '/js/store.js',
-  '/js/utils.js',
-  '/js/components/header.js',
-  '/js/components/sidebar.js',
+  './',
+  './index.html',
+  './app.html',
+  './offline.html',
+  './style.css',
+  './manifest.json',
+  './images/eeprom no bg.png',
+  './js/pwa.js',
+  './js/auth.js',
+  './js/config.js',
+  './js/router.js',
+  './js/store.js',
+  './js/utils.js',
+  './js/components/header.js',
+  './js/components/sidebar.js',
   'https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap',
   'https://unpkg.com/lucide@latest/dist/umd/lucide.js'
 ];
@@ -66,7 +66,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // 2. Stale While Revalidate for Images
-  if (requestUrl.pathname.startsWith('/images/') || event.request.destination === 'image') {
+  if (requestUrl.pathname.includes('/images/') || event.request.destination === 'image') {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
         const fetchPromise = fetch(event.request).then((networkResponse) => {
@@ -95,7 +95,7 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => {
         // Fallback to offline.html if navigation request fails
         if (event.request.mode === 'navigate') {
-          return caches.match('/offline.html');
+          return caches.match('./offline.html');
         }
       });
     })
@@ -125,8 +125,8 @@ self.addEventListener('push', (event) => {
   const title = data.title;
   const options = {
     body: data.content,
-    icon: '/images/eeprom no bg.png',
-    badge: '/images/eeprom no bg.png'
+    icon: './images/eeprom no bg.png',
+    badge: './images/eeprom no bg.png'
   };
 
   event.waitUntil(self.registration.showNotification(title, options));
@@ -136,6 +136,6 @@ self.addEventListener('notificationclick', (event) => {
   console.log('[Service Worker] Notification click received.');
   event.notification.close();
   event.waitUntil(
-    clients.openWindow('/')
+    clients.openWindow('./')
   );
 });
