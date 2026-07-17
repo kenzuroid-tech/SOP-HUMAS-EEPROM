@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="EEPROM Humas Management System — Dashboard">
+    <meta name="theme-color" content="#6C63FF">
+    <title>Dashboard — EEPROM Humas Management System</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- jsPDF (for PDF export) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="app-body">
+    
+    <!-- App Layout -->
+    <div class="app-layout" id="app-layout">
+        
+        <!-- Sidebar Overlay (Mobile) -->
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+        
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <!-- Rendered by sidebar.js -->
+        </aside>
+        
+        <!-- Main Wrapper -->
+        <div class="main-wrapper" id="main-wrapper">
+            
+            <!-- Header -->
+            <header id="app-header" class="app-header">
+                <!-- Rendered by header.js -->
+            </header>
+            
+            <!-- Main Content Area -->
+            <main id="main-content" class="main-content">
+                <!-- Rendered by router.js -->
+                <div class="page-loading">
+                    <div class="spinner-lg"></div>
+                    <p>Memuat...</p>
+                </div>
+            </main>
+            
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay"></div>
+    
+    <script type="module">
+        import { initSupabase, checkSession } from './js/auth.js';
+        import { initRouter } from './js/router.js';
+        import { renderSidebar } from './js/components/sidebar.js';
+        import { renderHeader } from './js/components/header.js';
+        import { loadPersistedState, initPersistence } from './js/store.js';
+        
+        async function initApp() {
+            // Init Supabase
+            initSupabase();
+            
+            // Load persisted state
+            loadPersistedState();
+            initPersistence();
+            
+            // Check authentication
+            const isAuth = await checkSession();
+            if (!isAuth) {
+                window.location.href = '/index.html';
+                return;
+            }
+            
+            // Render shell components
+            renderSidebar();
+            renderHeader();
+            
+            // Init Lucide icons
+            lucide.createIcons();
+            
+            // Init router (will render first page)
+            await initRouter();
+        }
+        
+        initApp().catch(err => {
+            console.error('App init failed:', err);
+            document.getElementById('main-content').innerHTML = `
+                <div class="error-page">
+                    <i data-lucide="alert-circle"></i>
+                    <h2>Gagal Memuat Aplikasi</h2>
+                    <p>${err.message}</p>
+                    <a href="/index.html" class="btn btn-primary">Kembali ke Login</a>
+                </div>
+            `;
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

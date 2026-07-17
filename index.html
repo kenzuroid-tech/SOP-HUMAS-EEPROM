@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="EEPROM Humas Management System — Sistem manajemen internal Divisi Humas Komunitas EEPROM">
+    <meta name="theme-color" content="#6C63FF">
+    <title>Login — EEPROM Humas Management System</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+    
+    <!-- Animated Background -->
+    <div class="login-bg">
+        <div class="bg-orb orb-1"></div>
+        <div class="bg-orb orb-2"></div>
+        <div class="bg-orb orb-3"></div>
+        <div class="bg-grid"></div>
+    </div>
+    
+    <div class="login-container">
+        <!-- Left Panel — Branding -->
+        <div class="login-brand-panel">
+            <div class="brand-content">
+                <div class="brand-logo-wrap">
+                    <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
+                        <rect width="72" height="72" rx="20" fill="url(#loginGrad)"/>
+                        <defs>
+                            <linearGradient id="loginGrad" x1="0" y1="0" x2="72" y2="72">
+                                <stop offset="0%" stop-color="#6C63FF"/>
+                                <stop offset="100%" stop-color="#8B5CF6"/>
+                            </linearGradient>
+                        </defs>
+                        <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="26" font-weight="800" font-family="Poppins,sans-serif">EH</text>
+                    </svg>
+                    <div class="brand-glow"></div>
+                </div>
+                
+                <h1 class="brand-title">EEPROM<br><span>Humas</span></h1>
+                <p class="brand-desc">Sistem manajemen internal Divisi Humas untuk mendokumentasikan seluruh kegiatan periode kepengurusan.</p>
+                
+                <!-- Feature List -->
+                <div class="brand-features">
+                    <div class="brand-feature">
+                        <div class="feature-icon"><i data-lucide="briefcase"></i></div>
+                        <span>8 Program Kerja</span>
+                    </div>
+                    <div class="brand-feature">
+                        <div class="feature-icon"><i data-lucide="check-square"></i></div>
+                        <span>Task Management</span>
+                    </div>
+                    <div class="brand-feature">
+                        <div class="feature-icon"><i data-lucide="image"></i></div>
+                        <span>Dokumentasi & Gallery</span>
+                    </div>
+                    <div class="brand-feature">
+                        <div class="feature-icon"><i data-lucide="bar-chart-2"></i></div>
+                        <span>Evaluasi & Laporan</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Floating Cards Preview -->
+            <div class="floating-cards">
+                <div class="float-card fc-1">
+                    <div class="fc-icon" style="color:#10B981"><i data-lucide="trending-up"></i></div>
+                    <div>
+                        <div class="fc-value">87%</div>
+                        <div class="fc-label">Avg Progress</div>
+                    </div>
+                </div>
+                <div class="float-card fc-2">
+                    <div class="fc-icon" style="color:#F59E0B"><i data-lucide="check-circle"></i></div>
+                    <div>
+                        <div class="fc-value">42</div>
+                        <div class="fc-label">Task Selesai</div>
+                    </div>
+                </div>
+                <div class="float-card fc-3">
+                    <div class="fc-icon" style="color:#EC4899"><i data-lucide="image"></i></div>
+                    <div>
+                        <div class="fc-value">128</div>
+                        <div class="fc-label">Dokumentasi</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel — Login Form -->
+        <div class="login-form-panel">
+            <div class="login-form-card">
+                <div class="login-form-header">
+                    <h2>Masuk ke Sistem</h2>
+                    <p>Gunakan akun Humas EEPROM Anda</p>
+                </div>
+                
+                <!-- Demo Mode Banner -->
+                <div class="demo-banner">
+                    <i data-lucide="info"></i>
+                    <div>
+                        <strong>Demo Mode Aktif</strong>
+                        <p>Gunakan: <code>admin@eeprom.ac.id</code> / password apapun (min. 6 karakter)</p>
+                    </div>
+                </div>
+                
+                <!-- Quick Login Buttons -->
+                <div class="quick-login-btns">
+                    <button class="quick-login-btn" data-email="admin@eeprom.ac.id">
+                        <i data-lucide="shield"></i> Super Admin
+                    </button>
+                    <button class="quick-login-btn" data-email="ketua@eeprom.ac.id">
+                        <i data-lucide="award"></i> Ketua Humas
+                    </button>
+                    <button class="quick-login-btn" data-email="staff@eeprom.ac.id">
+                        <i data-lucide="user"></i> Staff Humas
+                    </button>
+                </div>
+                
+                <div class="divider-text"><span>atau masukkan manual</span></div>
+                
+                <!-- Login Form -->
+                <form id="login-form" class="form" novalidate>
+                    <div class="form-group" id="email-group">
+                        <label for="email">Email</label>
+                        <div class="input-icon-wrapper">
+                            <i data-lucide="mail"></i>
+                            <input type="email" id="email" name="email" 
+                                   class="form-input" 
+                                   placeholder="email@eeprom.ac.id"
+                                   autocomplete="email"
+                                   required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" id="password-group">
+                        <label for="password">Password</label>
+                        <div class="input-icon-wrapper">
+                            <i data-lucide="lock"></i>
+                            <input type="password" id="password" name="password" 
+                                   class="form-input" 
+                                   placeholder="••••••••"
+                                   autocomplete="current-password"
+                                   required>
+                            <button type="button" class="password-toggle" id="pass-toggle">
+                                <i data-lucide="eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Error Message -->
+                    <div class="login-error" id="login-error" style="display:none">
+                        <i data-lucide="alert-circle"></i>
+                        <span id="login-error-msg"></span>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-full" id="login-btn">
+                        <span id="login-btn-text">
+                            <i data-lucide="log-in"></i> Masuk
+                        </span>
+                        <span id="login-btn-loading" style="display:none">
+                            <span class="spinner-sm"></span> Memproses...
+                        </span>
+                    </button>
+                </form>
+                
+                <div class="login-footer">
+                    <p>Belum punya akun? Hubungi <strong>Super Admin</strong> Humas EEPROM</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <script type="module">
+        import { login, checkSession } from './js/auth.js';
+        import { initSupabase } from './js/auth.js';
+        import { APP_CONFIG } from './js/config.js';
+        
+        // Init
+        initSupabase();
+        lucide.createIcons();
+        
+        // Hide demo elements if not in demo mode
+        if (!APP_CONFIG.demoMode) {
+            document.querySelector('.demo-banner')?.remove();
+            document.querySelector('.quick-login-btns')?.remove();
+            const dividerText = document.querySelector('.divider-text');
+            if (dividerText) dividerText.remove();
+        }
+        
+        // Check if already logged in
+        checkSession().then(isAuth => {
+            if (isAuth) {
+                window.location.href = '/app.html';
+            }
+        });
+        
+        // Login form
+        const form = document.getElementById('login-form');
+        const loginBtn = document.getElementById('login-btn');
+        const loginBtnText = document.getElementById('login-btn-text');
+        const loginBtnLoading = document.getElementById('login-btn-loading');
+        const errorEl = document.getElementById('login-error');
+        const errorMsg = document.getElementById('login-error-msg');
+        
+        function setLoading(loading) {
+            loginBtn.disabled = loading;
+            loginBtnText.style.display = loading ? 'none' : 'flex';
+            loginBtnLoading.style.display = loading ? 'flex' : 'none';
+        }
+        
+        function showError(msg) {
+            errorEl.style.display = 'flex';
+            errorMsg.textContent = msg;
+            lucide.createIcons({ nodes: [errorEl] });
+        }
+        
+        function hideError() {
+            errorEl.style.display = 'none';
+        }
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+            
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                showError('Email dan password harus diisi');
+                return;
+            }
+            
+            setLoading(true);
+            const { data, error } = await login(email, password);
+            setLoading(false);
+            
+            if (error) {
+                showError(error.message || 'Login gagal');
+                document.getElementById('email-group').classList.add('error');
+                document.getElementById('password-group').classList.add('error');
+            } else {
+                // Redirect to app
+                window.location.href = '/app.html';
+            }
+        });
+        
+        // Clear errors on input
+        ['email', 'password'].forEach(id => {
+            document.getElementById(id)?.addEventListener('input', () => {
+                hideError();
+                document.getElementById(`${id}-group`)?.classList.remove('error');
+            });
+        });
+        
+        // Password toggle
+        document.getElementById('pass-toggle')?.addEventListener('click', () => {
+            const input = document.getElementById('password');
+            const icon = document.querySelector('#pass-toggle i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                input.type = 'password';
+                icon.setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons({ nodes: [document.getElementById('pass-toggle')] });
+        });
+        
+        // Quick login buttons
+        document.querySelectorAll('.quick-login-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const email = btn.dataset.email;
+                document.getElementById('email').value = email;
+                document.getElementById('password').value = 'demo123';
+                hideError();
+                document.querySelectorAll('.quick-login-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+        
+        // Floating card animation
+        document.querySelectorAll('.float-card').forEach((card, i) => {
+            card.style.animationDelay = `${i * 0.5}s`;
+        });
+    </script>
+</body>
+</html>
