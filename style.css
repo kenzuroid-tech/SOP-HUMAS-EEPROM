@@ -2077,6 +2077,240 @@ input[type="range"]::-webkit-slider-thumb {
     color: #ef4444;
 }
 
+/* Jarkom badge on template card */
+.jarkom-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    background: rgba(37, 211, 102, 0.12);
+    border: 1px solid rgba(37, 211, 102, 0.3);
+    color: #25D366;
+    border-radius: var(--radius-full);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+.jarkom-badge svg { width: 11px; height: 11px; }
+
+/* Buat Jarkom button */
+.btn-success {
+    background: linear-gradient(135deg, #19a34a, #25D366);
+    color: #fff;
+    font-weight: 600;
+    border: none;
+    transition: var(--transition-fast);
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.25);
+}
+.btn-success:hover {
+    background: linear-gradient(135deg, #15903f, #1fb558);
+    box-shadow: 0 4px 16px rgba(37, 211, 102, 0.4);
+    transform: translateY(-1px);
+}
+
+/* ============================================================
+   JARKOM GENERATOR MODAL
+   ============================================================ */
+
+.jarkom-form-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Info strip */
+.jarkom-template-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(108, 99, 255, 0.08);
+    border: 1px solid rgba(108, 99, 255, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 0.83rem;
+    color: var(--primary-light);
+}
+
+/* 2-column field grid */
+.jarkom-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 18px;
+}
+
+/* NB textarea spans full width */
+.jarkom-field-group[data-key="nb"] {
+    grid-column: 1 / -1;
+}
+
+/* Required star */
+.required-star {
+    color: var(--danger);
+    margin-left: 2px;
+    font-weight: 700;
+}
+.optional-label {
+    color: var(--text-faint);
+    font-size: 0.75rem;
+    font-weight: 400;
+    margin-left: 4px;
+}
+
+/* Jarkom input focus ring */
+.jarkom-input:focus {
+    border-color: #25D366;
+    box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.12);
+}
+
+/* Readonly hari input */
+.jarkom-input[readonly] {
+    background: rgba(255,255,255,0.03);
+    color: var(--text-muted);
+    cursor: default;
+}
+
+/* Full-width column in jarkom grid */
+.jarkom-full-col {
+    grid-column: 1 / -1;
+}
+
+/* Date picker wrapper */
+.jarkom-date-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.jarkom-date-input {
+    color-scheme: dark;
+}
+
+.jarkom-date-preview {
+    font-size: 0.8rem;
+    color: #25D366;
+    font-weight: 600;
+    padding: 4px 2px;
+    min-height: 22px;
+}
+
+/* Auto badge on hari label */
+.jarkom-auto-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    background: rgba(108, 99, 255, 0.12);
+    border: 1px solid rgba(108, 99, 255, 0.25);
+    color: var(--primary-light);
+    border-radius: var(--radius-full);
+    font-size: 0.68rem;
+    font-weight: 600;
+    margin-left: 6px;
+    vertical-align: middle;
+    cursor: default;
+}
+
+/* Preview section */
+.jarkom-preview-section {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(37, 211, 102, 0.2);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.jarkom-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(37, 211, 102, 0.07);
+    border-bottom: 1px solid rgba(37, 211, 102, 0.15);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #25D366;
+}
+
+.jarkom-preview-text {
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.75;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 16px;
+    color: var(--text-muted);
+    min-height: 120px;
+    max-height: 280px;
+    overflow-y: auto;
+    margin: 0;
+    transition: color 0.2s;
+}
+
+/* Save row */
+.jarkom-save-row {
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+}
+
+.jarkom-save-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--text);
+}
+
+.jarkom-save-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+/* Mobile jarkom */
+@media (max-width: 640px) {
+    .jarkom-fields-grid {
+        grid-template-columns: 1fr;
+    }
+    .jarkom-field-group[data-key="nb"] {
+        grid-column: 1;
+    }
+}
+
+/* Link Google Drive wrapper */
+.jarkom-link-wrap {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.jarkom-link-input {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    letter-spacing: -0.01em;
+}
+
+.jarkom-link-open {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    transition: var(--transition-fast);
+}
+
+.jarkom-link-open:hover {
+    background: rgba(108, 99, 255, 0.15);
+    color: var(--primary-light);
+}
+
+
+
 /* ============================================================
    TIMELINE / CALENDAR
    ============================================================ */

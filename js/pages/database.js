@@ -43,11 +43,15 @@ function getPageHTML(stats) {
                         <i data-lucide="user-plus"></i> Tambah Data
                     </button>
                 ` : ''}
+                <button class="btn btn-outline" id="open-reg-form-btn" title="Buka form pendaftaran publik untuk maba">
+                    <i data-lucide="link"></i> Form Daftar
+                </button>
                 <button class="btn btn-outline" id="export-db-btn">
                     <i data-lucide="download"></i> Export CSV
                 </button>
             </div>
         </div>
+
         
         <!-- Type Stats Cards -->
         <div class="db-stats-grid">
@@ -328,7 +332,58 @@ function showParticipantForm(participant = null) {
 
 function setupEvents() {
     document.getElementById('add-participant-btn')?.addEventListener('click', () => showParticipantForm());
-    
+
+    // Tombol Form Pendaftaran Publik
+    document.getElementById('open-reg-form-btn')?.addEventListener('click', () => {
+        const regUrl = `${location.origin}${location.pathname.replace('app.html', '')}register.html`;
+        showModal({
+            title: '🔗 Form Pendaftaran Publik',
+            content: `
+                <div style="display:flex;flex-direction:column;gap:16px;">
+                    <p style="color:var(--text-muted);font-size:0.9rem;line-height:1.6;">
+                        Bagikan link ini kepada calon pendaftar (maba). Mereka bisa mengisi form
+                        tanpa perlu login, dan data akan langsung masuk ke database ini.
+                    </p>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="text" id="reg-link-input" class="form-input"
+                               value="${regUrl}" readonly
+                               style="font-size:0.8rem;font-family:monospace;flex:1;">
+                        <button class="btn btn-primary btn-sm" id="copy-reg-link-btn"
+                                style="white-space:nowrap;flex-shrink:0;">
+                            <i data-lucide="clipboard-copy" style="width:14px;height:14px;"></i> Salin
+                        </button>
+                    </div>
+                    <a href="${regUrl}" target="_blank" class="btn btn-outline btn-sm"
+                       style="width:100%;justify-content:center;">
+                        <i data-lucide="external-link" style="width:14px;height:14px;"></i>
+                        Buka Form di Tab Baru
+                    </a>
+                    <div style="padding:12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-sm);font-size:12px;color:var(--warning,#F59E0B);line-height:1.6;">
+                        ⚠️ Pastikan kamu sudah menjalankan SQL setup di
+                        <code style="background:rgba(0,0,0,0.2);padding:1px 4px;border-radius:3px;">sql/register_security_setup.sql</code>
+                        di Supabase sebelum membagikan link ini.
+                    </div>
+                </div>
+            `,
+            size: 'md',
+            confirmText: 'Tutup',
+            onConfirm: () => {},
+        });
+        setTimeout(() => {
+            if (window.lucide) lucide.createIcons();
+            document.getElementById('copy-reg-link-btn')?.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(regUrl);
+                    toast.success('Link berhasil disalin!');
+                } catch {
+                    document.getElementById('reg-link-input')?.select();
+                    toast.info('Tekan Ctrl+C untuk menyalin');
+                }
+            });
+        }, 100);
+    });
+
+
     document.getElementById('export-db-btn')?.addEventListener('click', () => {
         const exportData = allParticipants
             .filter(p => filters.type === 'all' || p.type === filters.type)

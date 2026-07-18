@@ -9,25 +9,158 @@ import { TEMPLATE_TYPES } from '../config.js';
 import { toast, confirmDelete, showModal, copyToClipboard, debounce, formatRelativeTime } from '../utils.js';
 import { getSupabase } from '../auth.js';
 
+// ============================================================
+// JARKOM GENERATOR — Smart parser & replacer
+// ============================================================
+
+const BULAN_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const HARI_ID  = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+
+/** ISO "YYYY-MM-DD" → "D Bulan YYYY" (Indonesian) */
+function formatDateID(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d)) return '';
+    return `${d.getDate()} ${BULAN_ID[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/** "D Bulan YYYY" → "YYYY-MM-DD" for <input type="date"> */
+function parseIDtoISO(idDate) {
+    if (!idDate) return '';
+    const parts = idDate.trim().split(' ');
+    if (parts.length < 3) return '';
+    const day   = parts[0].padStart(2, '0');
+    const mIdx  = BULAN_ID.findIndex(b => b.toLowerCase() === parts[1].toLowerCase());
+    if (mIdx === -1) return '';
+    return `${parts[2]}-${String(mIdx + 1).padStart(2, '0')}-${day}`;
+}
+
+/** ISO date → Indonesian day name */
+function getHariID(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    return isNaN(d) ? '' : HARI_ID[d.getDay()];
+}
+
+/** Escape special regex characters */
+function escapeRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+/**
+ * Parse current values embedded in existing template content.
+ * Detects: nama, angkatan, kegiatan, hari, tanggal, pukul, lokasi, dc, nb
+ */
+function parseJarkomFromTemplate(content) {
+    const get = (rx, src) => { const m = src.match(rx); return m ? m[1].trim() : ''; };
+
+    // Nama — "Perkenalkan saya NAME dari"
+    const nama = get(/[Pp]erkenalkan\s+saya\s+([^\n]+?)\s+dari\s/u, content);
+
+    // Angkatan — first "Angkatan NN" (digits only)
+    const angkatan = get(/Angkatan\s+(\d+)/, content);
+
+    // Kegiatan — bold text after "kegiatan \*"
+    const kegiatan = get(/kegiatan\s+\*([^*]+)\*/i, content);
+
+    // Schedule fields — after label + arbitrary whitespace/colon
+    const lineVal = (label) =>
+        get(new RegExp(`${label}\\s*[:\\t ]+([^\\n]+)`), content).replace(/^:\s*/, '').trim();
+
+    const hari    = lineVal('Hari');
+    const tanggal = lineVal('Tanggal');
+    const pukul   = lineVal('Pukul');
+    const lokasi  = lineVal('Lokasi');
+    const dc      = lineVal('DC');
+    const nb      = get(/NB\s*[:\t ]+([^\n]+(?:\n(?![A-Z*\ud83d\udcdd])[^\n]+)*)/u, content).replace(/^:\s*/, '').trim();
+
+    // Link Google Drive / Docs — URL apapun yang mengandung drive.google atau docs.google
+    const linkMatch = content.match(/https:\/\/(?:drive|docs)\.google\.com\/[^\s)>"'\n]+/);
+    const link = linkMatch ? linkMatch[0].trim() : '';
+
+    return { nama, angkatan, kegiatan, hari, tanggal, pukul, lokasi, dc, nb, link };
+}
+
+/**
+ * Apply user's edited values to the original template content.
+ * Each value is replaced globally (all occurrences).
+ */
+function applyJarkomReplacements(content, original, newVal) {
+    let r = content;
+
+    // Safe global replace (only when value actually changed)
+    const repAll = (old, neo) => {
+        if (!old || old === neo) return;
+        r = r.split(old).join(neo);
+    };
+
+    // Nama — replace the name wherever it appears
+    repAll(original.nama, newVal.nama);
+
+    // Angkatan — "Angkatan 16" → "Angkatan {new}" globally
+    if (original.angkatan && newVal.angkatan !== original.angkatan) {
+        r = r.split(`Angkatan ${original.angkatan}`).join(`Angkatan ${newVal.angkatan}`);
+    }
+
+    // Kegiatan — replace the kegiatan text (usually in bold)
+    repAll(original.kegiatan, newVal.kegiatan);
+
+    // Schedule fields — replace value on the line after the label
+    const replaceLineVal = (label, oldV, newV) => {
+        if (!oldV || oldV === newV) return;
+        r = r.replace(
+            new RegExp(`(${escapeRx(label)}\\s*[:\\t ]+)${escapeRx(oldV)}`, 'g'),
+            `$1${newV}`
+        );
+    };
+
+    replaceLineVal('Hari',    original.hari,    newVal.hari);
+    replaceLineVal('Tanggal', original.tanggal, newVal.tanggal);
+    replaceLineVal('Pukul',   original.pukul,   newVal.pukul);
+    replaceLineVal('Lokasi',  original.lokasi,  newVal.lokasi);
+    replaceLineVal('DC',      original.dc,      newVal.dc);
+
+    // NB — replace existing, or append before closing salam if newly added
+    const hasNBinTemplate = /NB\s*[:\t ]/.test(content);
+    if (hasNBinTemplate) {
+        if (original.nb !== newVal.nb) {
+            r = r.replace(
+                new RegExp(`(NB\\s*[:\\t ]+)${escapeRx(original.nb)}`, 'g'),
+                `$1${newVal.nb}`
+            );
+        }
+    } else if (newVal.nb) {
+        // Append NB before closing wassalam
+        const idx = r.lastIndexOf('*Wassalamu');
+        const nbLine = `\n\ud83d\udcdd *NB :*\n${newVal.nb}\n\n`;
+        r = idx > -1 ? r.slice(0, idx) + nbLine + r.slice(idx) : r + `\n\n\ud83d\udcdd *NB :*\n${newVal.nb}`;
+    }
+
+    // Link Google Drive — global replace of the URL
+    if (original.link && newVal.link && original.link !== newVal.link) {
+        r = r.split(original.link).join(newVal.link);
+    }
+
+    return r;
+}
+
 let allTemplates = [];
 let filters = { type: 'all', search: '' };
 
 export async function render(container) {
     container.innerHTML = getSkeletonHTML();
-    
+
     const { data: templates } = await fetchTemplates();
     allTemplates = templates || [];
-    
+
     container.innerHTML = getPageHTML();
     if (window.lucide) lucide.createIcons({ nodes: [container] });
-    
+
     renderTemplates();
     setupEvents();
 }
 
 function getPageHTML() {
     const canCreate = hasPermission('templates', 'create');
-    
+
     return `
         <div class="page-header">
             <div>
@@ -71,16 +204,16 @@ function getPageHTML() {
 function renderTemplates() {
     const grid = document.getElementById('templates-grid');
     if (!grid) return;
-    
+
     let filtered = [...allTemplates];
     if (filters.type !== 'all') filtered = filtered.filter(t => t.type === filters.type);
     if (filters.search) {
         const s = filters.search.toLowerCase();
-        filtered = filtered.filter(t => 
+        filtered = filtered.filter(t =>
             t.title?.toLowerCase().includes(s) || t.content?.toLowerCase().includes(s)
         );
     }
-    
+
     if (filtered.length === 0) {
         grid.innerHTML = `
             <div class="empty-state">
@@ -91,7 +224,7 @@ function renderTemplates() {
         `;
         return;
     }
-    
+
     grid.innerHTML = filtered.map(t => getTemplateCard(t)).join('');
     if (window.lucide) lucide.createIcons({ nodes: [grid] });
 }
@@ -99,7 +232,8 @@ function renderTemplates() {
 function getTemplateCard(template) {
     const typeConf = TEMPLATE_TYPES[template.type] || {};
     const preview = template.content.split('\n').slice(0, 3).join('\n');
-    
+    const isJarkom = template.title && template.title.toLowerCase().includes('jarkom');
+
     return `
         <div class="template-card" data-template-id="${template.id}">
             <div class="template-card-header">
@@ -107,6 +241,7 @@ function getTemplateCard(template) {
                     <i data-lucide="${typeConf.icon}"></i>
                     ${typeConf.label}
                 </div>
+                ${isJarkom ? `<span class="jarkom-badge"><i data-lucide="send"></i> Jarkom</span>` : ''}
                 ${template.is_favorite ? `<i data-lucide="star" class="text-warning" style="width:16px;height:16px;"></i>` : ''}
             </div>
             
@@ -125,6 +260,11 @@ function getTemplateCard(template) {
                     <i data-lucide="copy"></i> Digunakan ${template.use_count || 0}x
                 </span>
                 <div class="template-card-btns">
+                    ${isJarkom ? `
+                        <button class="btn btn-success btn-sm jarkom-btn" title="Buat Jarkom" data-action="jarkom" data-id="${template.id}">
+                            <i data-lucide="send"></i> Buat Jarkom
+                        </button>
+                    ` : ''}
                     <button class="btn btn-ghost btn-sm view-btn" title="Lihat Template" data-action="view" data-id="${template.id}">
                         <i data-lucide="eye"></i> Lihat
                     </button>
@@ -148,15 +288,15 @@ function getTemplateCard(template) {
 function showTemplateForm(template = null) {
     const isEdit = !!template;
     const isSurat = template?.type === 'surat';
-    
+
     const formHTML = `
         <form id="template-form" class="form">
             <div class="form-group">
                 <label>Jenis Template *</label>
                 <select name="type" class="form-input" required id="tpl-type-select">
-                    ${Object.entries(TEMPLATE_TYPES).map(([k, v]) => 
-                        `<option value="${k}" ${template?.type === k ? 'selected' : ''}>${v.label}</option>`
-                    ).join('')}
+                    ${Object.entries(TEMPLATE_TYPES).map(([k, v]) =>
+        `<option value="${k}" ${template?.type === k ? 'selected' : ''}>${v.label}</option>`
+    ).join('')}
                 </select>
             </div>
             <div class="form-group">
@@ -218,7 +358,7 @@ function showTemplateForm(template = null) {
             </div>
         </form>
     `;
-    
+
     showModal({
         title: isEdit ? 'Edit Template' : 'Tambah Template',
         content: formHTML,
@@ -230,7 +370,7 @@ function showTemplateForm(template = null) {
             const tagsStr = fd.get('tags_str') || '';
             const tags = tagsStr.split(',').map(t => t.trim()).filter(Boolean);
             const type = fd.get('type');
-            
+
             const data = {
                 type,
                 title: fd.get('title'),
@@ -239,36 +379,36 @@ function showTemplateForm(template = null) {
                 is_favorite: fd.has('is_favorite'),
                 link_url: fd.get('link_url') || null,
             };
-            
+
             // Handle file upload for 'surat' type
             const fileInput = document.getElementById('tpl-file-input');
             if (type === 'surat' && fileInput?.files?.length > 0) {
                 const file = fileInput.files[0];
                 toast.info('Mengupload file...');
-                
+
                 const fileExt = file.name.split('.').pop();
                 const fileName = `templates/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-                
+
                 const { error: uploadErr } = await getSupabase().storage
                     .from('documents')
                     .upload(fileName, file, { upsert: true });
-                
+
                 if (uploadErr) {
                     console.error('Upload error:', uploadErr);
                     toast.error('Gagal mengupload file: ' + uploadErr.message);
                     return;
                 }
-                
+
                 const { data: urlData } = getSupabase().storage
                     .from('documents')
                     .getPublicUrl(fileName);
-                
+
                 data.file_url = urlData.publicUrl;
                 if (!data.content) {
                     data.content = `[File: ${file.name}]`;
                 }
             }
-            
+
             if (isEdit) {
                 const { error } = await updateTemplate(template.id, data);
                 if (error) { toast.error('Gagal mengupdate template'); return; }
@@ -278,17 +418,17 @@ function showTemplateForm(template = null) {
                 if (error) { toast.error('Gagal menambah template'); return; }
                 toast.success('Template berhasil ditambahkan!');
             }
-            
+
             const { data: updated } = await fetchTemplates(filters);
             allTemplates = updated || [];
             renderTemplates();
         },
     });
-    
+
     // Setup dynamic form behavior
     setTimeout(() => {
         if (window.lucide) lucide.createIcons();
-        
+
         const typeSelect = document.getElementById('tpl-type-select');
         const fileGroup = document.getElementById('tpl-file-group');
         const linkGroup = document.getElementById('tpl-link-group');
@@ -299,7 +439,7 @@ function showTemplateForm(template = null) {
         const fileInput = document.getElementById('tpl-file-input');
         const fileNameEl = document.getElementById('tpl-file-name');
         const fileNameText = document.getElementById('tpl-file-name-text');
-        
+
         function updateFormForType(type) {
             if (type === 'surat') {
                 fileGroup.style.display = 'block';
@@ -319,10 +459,10 @@ function showTemplateForm(template = null) {
                 contentHint.textContent = 'Gunakan {{variabel}} untuk bagian yang dapat diganti';
             }
         }
-        
+
         typeSelect?.addEventListener('change', (e) => updateFormForType(e.target.value));
         updateFormForType(typeSelect?.value);
-        
+
         // File upload button
         fileBtn?.addEventListener('click', () => fileInput?.click());
         fileInput?.addEventListener('change', () => {
@@ -345,12 +485,12 @@ function showTemplateForm(template = null) {
 
 function setupEvents() {
     document.getElementById('add-template-btn')?.addEventListener('click', () => showTemplateForm());
-    
+
     document.getElementById('template-search')?.addEventListener('input', debounce((e) => {
         filters.search = e.target.value;
         renderTemplates();
     }, 300));
-    
+
     document.querySelectorAll('.template-type-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             document.querySelectorAll('.template-type-tab').forEach(t => t.classList.remove('active'));
@@ -359,8 +499,17 @@ function setupEvents() {
             renderTemplates();
         });
     });
-    
+
     document.getElementById('templates-grid')?.addEventListener('click', async (e) => {
+        // Jarkom button
+        const jarkomBtn = e.target.closest('[data-action="jarkom"]');
+        if (jarkomBtn) {
+            const id = jarkomBtn.dataset.id;
+            const template = allTemplates.find(t => t.id === id);
+            if (template) showJarkomForm(template);
+            return;
+        }
+
         // Copy button
         const copyBtn = e.target.closest('.copy-btn');
         if (copyBtn) {
@@ -377,7 +526,7 @@ function setupEvents() {
             if (window.lucide) lucide.createIcons({ nodes: [copyBtn] });
             return;
         }
-        
+
         // Edit
         const editBtn = e.target.closest('[data-action="edit"]');
         if (editBtn) {
@@ -386,7 +535,7 @@ function setupEvents() {
             if (template) showTemplateForm(template);
             return;
         }
-        
+
         // View
         const viewBtn = e.target.closest('[data-action="view"]');
         if (viewBtn) {
@@ -395,7 +544,7 @@ function setupEvents() {
             if (template) showTemplateView(template);
             return;
         }
-        
+
         // Delete
         const deleteBtn = e.target.closest('[data-action="delete"]');
         if (deleteBtn) {
@@ -415,7 +564,7 @@ function setupEvents() {
 function showTemplateView(template) {
     const typeConf = TEMPLATE_TYPES[template.type] || {};
     const hasFile = template.type === 'surat' && template.file_url;
-    
+
     const viewHTML = `
         <div class="template-view">
             <div class="template-view-meta" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
@@ -509,7 +658,7 @@ function showTemplateView(template) {
             ` : ''}
         </div>
     `;
-    
+
     showModal({
         title: template.title,
         content: viewHTML,
@@ -523,12 +672,278 @@ function showTemplateView(template) {
             }
         },
     });
-    
+
     setTimeout(() => {
         if (window.lucide) lucide.createIcons();
     }, 100);
 }
 
+// ============================================================
+// JARKOM GENERATOR
+// ============================================================
+
+function showJarkomForm(template) {
+    // 1. Parse nilai-nilai yang sudah ada di template
+    const original = parseJarkomFromTemplate(template.content);
+    const isoDate  = parseIDtoISO(original.tanggal);
+
+    // Helper: escape HTML attribute values
+    const esc = (s) => (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+    const formHTML = `
+        <div class="jarkom-form-wrap">
+            <!-- Info strip -->
+            <div class="jarkom-template-info">
+                <i data-lucide="file-text" style="width:16px;height:16px;flex-shrink:0;"></i>
+                <span>Template: <strong>${template.title}</strong> — ubah kolom yang perlu diganti saja</span>
+            </div>
+
+            <div class="jarkom-fields-grid">
+                <!-- Nama Pengirim -->
+                <div class="form-group">
+                    <label for="jf-nama">Nama Pengirim <span class="required-star">*</span></label>
+                    <input type="text" id="jf-nama" class="form-input jarkom-input"
+                           placeholder="cth: Haydar Rafi Anis"
+                           value="${esc(original.nama)}">
+                </div>
+
+                <!-- Angkatan -->
+                <div class="form-group">
+                    <label for="jf-angkatan">Angkatan <span class="required-star">*</span>
+                        <span class="optional-label">(target)</span>
+                    </label>
+                    <input type="text" id="jf-angkatan" class="form-input jarkom-input"
+                           placeholder="cth: 16"
+                           value="${esc(original.angkatan)}">
+                </div>
+
+                <!-- Kegiatan (full width) -->
+                <div class="form-group jarkom-full-col">
+                    <label for="jf-kegiatan">Nama Kegiatan <span class="required-star">*</span></label>
+                    <input type="text" id="jf-kegiatan" class="form-input jarkom-input"
+                           placeholder="cth: Tes Tulis Komunitas EEPROM 2025"
+                           value="${esc(original.kegiatan)}">
+                </div>
+
+                <!-- Tanggal — date picker -->
+                <div class="form-group">
+                    <label for="jf-tanggal-picker">Tanggal <span class="required-star">*</span></label>
+                    <div class="jarkom-date-wrap">
+                        <input type="date" id="jf-tanggal-picker" class="form-input jarkom-input jarkom-date-input"
+                               value="${isoDate}">
+                        <div class="jarkom-date-preview" id="jf-tanggal-preview">
+                            ${original.tanggal || '<em style="opacity:.5">Pilih tanggal...</em>'}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hari — auto-filled dari date picker -->
+                <div class="form-group">
+                    <label for="jf-hari">Hari <span class="required-star">*</span>
+                        <span class="jarkom-auto-badge" id="jf-hari-auto-badge" title="Terisi otomatis dari tanggal">
+                            <i data-lucide="wand-2" style="width:10px;height:10px;"></i> Auto
+                        </span>
+                    </label>
+                    <input type="text" id="jf-hari" class="form-input jarkom-input"
+                           placeholder="cth: Selasa"
+                           value="${esc(original.hari)}"
+                           readonly>
+                </div>
+
+                <!-- Pukul -->
+                <div class="form-group">
+                    <label for="jf-pukul">Pukul <span class="required-star">*</span></label>
+                    <input type="text" id="jf-pukul" class="form-input jarkom-input"
+                           placeholder="cth: 19.00 WIB – selesai"
+                           value="${esc(original.pukul)}">
+                </div>
+
+                <!-- Lokasi -->
+                <div class="form-group">
+                    <label for="jf-lokasi">Lokasi <span class="required-star">*</span></label>
+                    <input type="text" id="jf-lokasi" class="form-input jarkom-input"
+                           placeholder="cth: Basecamp Komunitas EEPROM"
+                           value="${esc(original.lokasi)}">
+                </div>
+
+                <!-- DC — textarea karena bisa panjang -->
+                <div class="form-group jarkom-full-col">
+                    <label for="jf-dc">Dresscode (DC) <span class="optional-label">(opsional)</span></label>
+                    <textarea id="jf-dc" class="form-input jarkom-input" rows="3"
+                              placeholder="cth: Baju Bengkel, Celana Kain Hitam Panjang...">${esc(original.dc)}</textarea>
+                </div>
+
+                <!-- NB -->
+                <div class="form-group jarkom-full-col">
+                    <label for="jf-nb">NB / Catatan Tambahan <span class="optional-label">(kosongkan jika tidak ada)</span></label>
+                    <textarea id="jf-nb" class="form-input jarkom-input" rows="2"
+                              placeholder="cth: Harap datang 15 menit lebih awal">${esc(original.nb)}</textarea>
+                </div>
+
+                <!-- Link Google Drive (muncul hanya jika template punya link) -->
+                ${original.link ? `
+                <div class="form-group jarkom-full-col">
+                    <label for="jf-link">
+                        <i data-lucide="hard-drive" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>
+                        Link Google Drive <span class="optional-label">(ganti jika perlu)</span>
+                    </label>
+                    <div class="jarkom-link-wrap">
+                        <input type="url" id="jf-link" class="form-input jarkom-input jarkom-link-input"
+                               placeholder="https://drive.google.com/..."
+                               value="${esc(original.link)}">
+                        <a id="jf-link-preview" href="${esc(original.link)}" target="_blank"
+                           class="btn btn-ghost btn-sm jarkom-link-open" title="Buka link">
+                            <i data-lucide="external-link" style="width:14px;height:14px;"></i>
+                        </a>
+                    </div>
+                </div>
+                ` : `
+                <div class="form-group jarkom-full-col">
+                    <label for="jf-link">
+                        <i data-lucide="hard-drive" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>
+                        Link Google Drive <span class="optional-label">(opsional, jika ada di template)</span>
+                    </label>
+                    <div class="jarkom-link-wrap">
+                        <input type="url" id="jf-link" class="form-input jarkom-input jarkom-link-input"
+                               placeholder="https://drive.google.com/...">
+                        <a id="jf-link-preview" href="#" target="_blank"
+                           class="btn btn-ghost btn-sm jarkom-link-open" title="Buka link" style="opacity:0.35;pointer-events:none;">
+                            <i data-lucide="external-link" style="width:14px;height:14px;"></i>
+                        </a>
+                    </div>
+                </div>
+                `}
+            </div>
+
+            <!-- Live Preview -->
+            <div class="jarkom-preview-section">
+                <div class="jarkom-preview-header">
+                    <i data-lucide="message-circle" style="width:15px;height:15px;"></i>
+                    <span>Preview Pesan WhatsApp</span>
+                    <div style="margin-left:auto;display:flex;gap:6px;">
+                        <button class="btn btn-primary btn-sm" id="jarkom-copy-btn">
+                            <i data-lucide="clipboard-copy" style="width:14px;height:14px;"></i> Salin Sekarang
+                        </button>
+                    </div>
+                </div>
+                <pre id="jarkom-preview" class="jarkom-preview-text">${template.content}</pre>
+            </div>
+
+            <!-- Simpan sebagai template baru -->
+            <div class="jarkom-save-row">
+                <label class="jarkom-save-label">
+                    <input type="checkbox" id="jarkom-save-check">
+                    Simpan hasil sebagai template baru
+                </label>
+                <div id="jarkom-save-title-wrap" style="display:none;margin-top:8px;">
+                    <input type="text" id="jarkom-save-title" class="form-input"
+                           placeholder="Nama template baru...">
+                </div>
+            </div>
+        </div>
+    `;
+
+    showModal({
+        title: `✉️ Buat Jarkom — ${template.title}`,
+        content: formHTML,
+        size: 'xl',
+        confirmText: 'Salin & Selesai',
+        onConfirm: async () => {
+            const text = document.getElementById('jarkom-preview')?.textContent || '';
+            await copyToClipboard(text);
+            await incrementUseCount(template.id);
+            toast.success('Jarkom berhasil disalin! 📋');
+
+            const saveCheck = document.getElementById('jarkom-save-check');
+            if (saveCheck?.checked) {
+                const title = document.getElementById('jarkom-save-title')?.value.trim()
+                    || `${template.title} — ${new Date().toLocaleDateString('id-ID')}`;
+                const { error } = await createTemplate({
+                    type: 'whatsapp', title, content: text,
+                    tags: [...(template.tags || []), 'jarkom'], is_favorite: false,
+                });
+                if (!error) {
+                    toast.success('Template baru disimpan!');
+                    const { data: updated } = await fetchTemplates();
+                    allTemplates = updated || [];
+                    renderTemplates();
+                } else {
+                    toast.error('Gagal menyimpan template');
+                }
+            }
+        },
+    });
+
+    setTimeout(() => {
+        if (window.lucide) lucide.createIcons();
+
+        // Nilai yang sedang aktif (dimulai dari nilai original)
+        const cur = { ...original };
+
+        function updatePreview() {
+            const el = document.getElementById('jarkom-preview');
+            if (!el) return;
+            el.textContent = applyJarkomReplacements(template.content, original, cur);
+        }
+
+        // Wire up text inputs
+        [['jf-nama','nama'],['jf-angkatan','angkatan'],['jf-kegiatan','kegiatan'],
+         ['jf-pukul','pukul'],['jf-lokasi','lokasi'],['jf-dc','dc'],['jf-nb','nb'],['jf-link','link']]
+        .forEach(([id, key]) => {
+            document.getElementById(id)?.addEventListener('input', (e) => {
+                cur[key] = e.target.value;
+                // Update open-link button when link changes
+                if (key === 'link') {
+                    const anchor = document.getElementById('jf-link-preview');
+                    if (anchor) {
+                        const isValid = e.target.value.startsWith('http');
+                        anchor.href = isValid ? e.target.value : '#';
+                        anchor.style.opacity = isValid ? '1' : '0.35';
+                        anchor.style.pointerEvents = isValid ? 'auto' : 'none';
+                    }
+                }
+                updatePreview();
+            });
+        });
+
+        // Date picker → auto-fill hari + tanggal
+        document.getElementById('jf-tanggal-picker')?.addEventListener('change', (e) => {
+            const iso = e.target.value;
+            if (!iso) return;
+            const tgl  = formatDateID(iso);
+            const hari = getHariID(iso);
+            cur.tanggal = tgl;
+            cur.hari    = hari;
+            const prevEl = document.getElementById('jf-tanggal-preview');
+            const hariEl = document.getElementById('jf-hari');
+            if (prevEl) prevEl.textContent = tgl;
+            if (hariEl) hariEl.value = hari;
+            updatePreview();
+        });
+
+        // Salin dari preview
+        document.getElementById('jarkom-copy-btn')?.addEventListener('click', async () => {
+            const text = document.getElementById('jarkom-preview')?.textContent || '';
+            await copyToClipboard(text);
+            await incrementUseCount(template.id);
+            toast.success('Jarkom disalin! 📋');
+        });
+
+        // Toggle save title
+        document.getElementById('jarkom-save-check')?.addEventListener('change', (e) => {
+            const wrap = document.getElementById('jarkom-save-title-wrap');
+            if (wrap) wrap.style.display = e.target.checked ? 'block' : 'none';
+            if (e.target.checked) {
+                const el = document.getElementById('jarkom-save-title');
+                if (el && !el.value) el.value = `${template.title} — ${new Date().toLocaleDateString('id-ID')}`;
+            }
+        });
+
+        // Initial preview (tampilkan template asli dulu)
+        updatePreview();
+    }, 120);
+}
+
 function getSkeletonHTML() {
-    return `<div class="templates-grid">${[1,2,3,4,5,6].map(() => `<div class="card skeleton h-56"></div>`).join('')}</div>`;
+    return `<div class="templates-grid">${[1, 2, 3, 4, 5, 6].map(() => `<div class="card skeleton h-56"></div>`).join('')}</div>`;
 }
