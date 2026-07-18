@@ -8,7 +8,7 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY, APP_CONFIG } from './config.js';
 import { store } from './store.js';
 import { toast, showLoading, hideLoading } from './utils.js';
-import { MOCK_USER } from './mockData.js';
+import { MOCK_USER, MOCK_MEMBERS } from './mockData.js';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -215,6 +215,22 @@ export async function fetchProfile(userId) {
     
     if (error) throw error;
     return data;
+}
+
+/**
+ * Fetch all members (profiles) from Supabase
+ */
+export async function fetchMembers() {
+    if (APP_CONFIG.demoMode) return { data: MOCK_MEMBERS, error: null };
+    
+    if (!supabaseClient) return { data: [], error: 'Supabase client not initialized' };
+    
+    const { data, error } = await supabaseClient
+        .from('profiles')
+        .select('id, full_name, nickname, role, jabatan, avatar_url')
+        .order('full_name');
+        
+    return { data, error };
 }
 
 /**

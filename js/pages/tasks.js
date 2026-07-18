@@ -8,7 +8,7 @@ import { fetchPrograms } from '../api/programs.js';
 import { store, hasPermission } from '../store.js';
 import { TASK_STATUS, TASK_PRIORITY } from '../config.js';
 import { toast, confirmDelete, showModal, formatDate, formatRelativeTime, debounce, searchFilter, fieldFilter, createPagination, serializeForm, setButtonLoading, copyToClipboard, exportCSV } from '../utils.js';
-import { MOCK_MEMBERS } from '../mockData.js';
+import { fetchMembers } from '../auth.js';
 
 let allTasks = [];
 let filters = { status: 'all', priority: 'all', program: 'all', search: '' };
@@ -134,12 +134,17 @@ function renderTaskList() {
         return;
     }
     
-    // Pagination
-    const total = filtered.length;
-    const start = (currentPage - 1) * PAGE_SIZE;
-    const paginated = filtered.slice(start, start + PAGE_SIZE);
+    // Group tasks by program
+    const groupedTasks = {};
+    filtered.forEach(task => {
+        const prog = task.program_name || 'Lainnya (Tanpa Program)';
+        if (!groupedTasks[prog]) groupedTasks[prog] = [];
+        groupedTasks[prog].push(task);
+    });
+
+    const programGroups = Object.keys(groupedTasks).sort();
     
-    if (paginated.length === 0) {
+    if (filtered.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <i data-lucide="check-square"></i>
@@ -151,23 +156,31 @@ function renderTaskList() {
         return;
     }
     
-    container.innerHTML = `
-        <div class="task-list-header">
-            <span class="text-muted text-sm">${total} task ditemukan</span>
-        </div>
-        <div class="task-cards">
-            ${paginated.map(task => getTaskCard(task)).join('')}
+    let html = `
+        <div class="task-list-header mb-4">
+            <span class="text-muted text-sm">${filtered.length} task ditemukan</span>
         </div>
     `;
+
+    programGroups.forEach(prog => {
+        html += `
+            <div class="task-group mb-6">
+                <h3 class="task-group-title" style="margin-bottom: 1rem; font-size: 1.1rem; font-weight: 600; color: var(--text-color); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i data-lucide="briefcase" style="width: 18px; height: 18px; color: var(--primary-color);"></i>
+                    ${prog} <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted); background: var(--bg-hover); padding: 2px 8px; border-radius: 12px; margin-left: 0.5rem;">${groupedTasks[prog].length} task</span>
+                </h3>
+                <div class="task-cards">
+                    ${groupedTasks[prog].map(task => getTaskCard(task)).join('')}
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
     
-    // Pagination
+    // Pagination (disabled because we show grouped lists now)
     if (paginationContainer) {
-        const pagination = createPagination({
-            total, page: currentPage, pageSize: PAGE_SIZE,
-            onPageChange: (page) => { currentPage = page; renderTaskList(); }
-        });
         paginationContainer.innerHTML = '';
-        if (pagination) paginationContainer.appendChild(pagination);
     }
     
     if (window.lucide) lucide.createIcons({ nodes: [container] });
@@ -305,9 +318,10 @@ function getKanbanCard(task) {
 // TASK FORM MODAL
 // ============================================================
 
-function showTaskForm(task = null, programs = []) {
+async function showTaskForm(task = null, programs = []) {
     const isEdit = !!task;
-    const members = MOCK_MEMBERS;
+    const { data: membersList } = await fetchMembers();
+    const members = membersList || [];
     
     const formHTML = `
         <form id="task-form" class="form">
@@ -415,8 +429,8 @@ function showTaskForm(task = null, programs = []) {
 
 function setupEvents(programs) {
     // Add task button
-    document.getElementById('add-task-btn')?.addEventListener('click', () => {
-        showTaskForm(null, programs);
+    document.getElementById('add-task-btn')?.addEventListener('click', async () => {
+        await showTaskForm(null, programs);
     });
     
     // Export
@@ -492,7 +506,7 @@ function setupTaskCardEvents(container) {
         
         if (action === 'edit' && task) {
             const { data: programs } = await fetchPrograms();
-            showTaskForm(task, programs);
+            await showTaskForm(task, programs);
         }
         
         if (action === 'delete') {

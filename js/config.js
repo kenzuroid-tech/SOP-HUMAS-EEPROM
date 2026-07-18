@@ -62,7 +62,6 @@ export const PROGRAMS = [
     { code: 'PRASTUDI',     name: 'Prastudi',           icon: 'book-open',    color: '#6C63FF' },
     { code: 'EXPO_KELEM',   name: 'Expo Kelembagaan',   icon: 'layout',       color: '#8B5CF6' },
     { code: 'GEMILANG',     name: 'Gemilang Prestasi',  icon: 'award',        color: '#EC4899' },
-    { code: 'OPEN_REC',     name: 'Open Recruitment',   icon: 'users-plus',   color: '#F59E0B' },
     { code: 'TES_TULIS',    name: 'Tes Tulis',          icon: 'pen-line',     color: '#10B981' },
     { code: 'TES_WAWANCARA',name: 'Tes Wawancara',      icon: 'message-square',color: '#06B6D4' },
     { code: 'DIKLAT_RUANG', name: 'Diklat Ruang',       icon: 'presentation', color: '#F97316' },
