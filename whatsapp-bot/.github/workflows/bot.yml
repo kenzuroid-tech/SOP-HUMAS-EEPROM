@@ -1,0 +1,60 @@
+name: Run WhatsApp Reminder Bot
+
+on:
+  schedule:
+    # Jalan setiap hari jam 19:00 WIB (12:00 UTC)
+    - cron: '0 12 * * *'
+  workflow_dispatch: # Izinkan jalan manual
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5  # Kill job kalau lebih dari 5 menit (mencegah hang karena QR)
+    
+    defaults:
+      run:
+        working-directory: ./whatsapp-bot  # Semua step berjalan dari folder ini
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: whatsapp-bot/package-lock.json  # Lokasi package-lock.json yang benar
+
+    - name: Install Chrome Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          ca-certificates fonts-liberation libasound2t64 \
+          libatk-bridge2.0-0 libatk1.0-0 libcairo2 libcups2 \
+          libdbus-1-3 libexpat1 libfontconfig1 libgbm1 libglib2.0-0 \
+          libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libx11-6 \
+          libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 \
+          libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 \
+          libxtst6 wget xdg-utils unzip
+      working-directory: /  # Tidak perlu working-directory untuk apt-get
+        
+    - name: Install Dependencies
+      run: npm ci  # Lebih cepat dan konsisten daripada npm install di CI
+      
+    - name: Restore WhatsApp Session
+      env:
+        WA_SESSION_BASE64: ${{ secrets.WA_SESSION_BASE64 }}
+      run: |
+        mkdir -p .wwebjs_auth/session
+        echo "$WA_SESSION_BASE64" | base64 -d > session.zip
+        unzip -o session.zip -d .wwebjs_auth/session/
+        rm session.zip
+        echo "✅ Sesi WhatsApp berhasil di-restore!"
+        ls -la .wwebjs_auth/session/ || echo "⚠️ Folder sesi kosong!"
+        
+    - name: Run WhatsApp Bot
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      run: node index.js
