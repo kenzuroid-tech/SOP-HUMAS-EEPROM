@@ -155,11 +155,11 @@ export const MOCK_TASKS = [
 ];
 
 export const MOCK_MEMBERS = [
-    { id: 'mock-user-001', full_name: 'Ahmad Fauzi', nickname: 'Fauzi', role: 'super_admin', jabatan: 'Ketua Humas', avatar_url: null },
+    { id: 'mock-user-001', full_name: 'Siti Nikmatus Sholihah', nickname: 'Nishoa', role: 'super_admin', jabatan: 'Ketua Humas', avatar_url: null },
     { id: 'mock-user-002', full_name: 'Siti Rahayu', nickname: 'Siti', role: 'ketua_humas', jabatan: 'Wakil Ketua Humas', avatar_url: null },
-    { id: 'mock-user-003', full_name: 'Budi Santoso', nickname: 'Budi', role: 'anggota_humas', jabatan: 'Anggota Humas', avatar_url: null },
-    { id: 'mock-user-004', full_name: 'Dewi Lestari', nickname: 'Dewi', role: 'anggota_humas', jabatan: 'Anggota Humas', avatar_url: null },
-    { id: 'mock-user-005', full_name: 'Rizki Pratama', nickname: 'Rizki', role: 'anggota_humas', jabatan: 'Anggota Humas', avatar_url: null },
+    { id: 'mock-user-003', full_name: 'Budi Santoso', nickname: 'Budi', role: 'staff_humas', jabatan: 'Staff Humas', avatar_url: null },
+    { id: 'mock-user-004', full_name: 'Dewi Lestari', nickname: 'Dewi', role: 'staff_humas', jabatan: 'Staff Humas', avatar_url: null },
+    { id: 'mock-user-005', full_name: 'Rizki Pratama', nickname: 'Rizki', role: 'staff_humas', jabatan: 'Staff Humas', avatar_url: null },
 ];
 
 export const MOCK_TIMELINE = [
@@ -331,15 +331,15 @@ export const MOCK_ACTIVITY_LOGS = [
 
 export const MOCK_STATS = {
     total_programs: 8,
-    active_programs: 2,
-    completed_programs: 2,
-    total_tasks: 63,
-    tasks_todo: 22,
-    tasks_in_progress: 18,
-    tasks_done: 20,
-    tasks_overdue: 3,
-    total_documents: 38,
-    total_participants: 47,
-    upcoming_events: 4,
-    avg_program_progress: 50,
+    active_programs: 0,
+    completed_programs: 0,
+    total_tasks: 0,
+    tasks_todo: 0,
+    tasks_in_progress: 0,
+    tasks_done: 0,
+    tasks_overdue: 0,
+    total_documents: 0,
+    total_participants: 0,
+    upcoming_events: 0,
+    avg_program_progress: 0,
 };

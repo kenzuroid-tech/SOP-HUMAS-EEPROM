@@ -13,8 +13,8 @@ import { getSupabase } from '../auth.js';
 // JARKOM GENERATOR — Smart parser & replacer
 // ============================================================
 
-const BULAN_ID = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-const HARI_ID  = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+const BULAN_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+const HARI_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 /** ISO "YYYY-MM-DD" → "D Bulan YYYY" (Indonesian) */
 function formatDateID(iso) {
@@ -29,8 +29,8 @@ function parseIDtoISO(idDate) {
     if (!idDate) return '';
     const parts = idDate.trim().split(' ');
     if (parts.length < 3) return '';
-    const day   = parts[0].padStart(2, '0');
-    const mIdx  = BULAN_ID.findIndex(b => b.toLowerCase() === parts[1].toLowerCase());
+    const day = parts[0].padStart(2, '0');
+    const mIdx = BULAN_ID.findIndex(b => b.toLowerCase() === parts[1].toLowerCase());
     if (mIdx === -1) return '';
     return `${parts[2]}-${String(mIdx + 1).padStart(2, '0')}-${day}`;
 }
@@ -65,18 +65,14 @@ function parseJarkomFromTemplate(content) {
     const lineVal = (label) =>
         get(new RegExp(`${label}\\s*[:\\t ]+([^\\n]+)`), content).replace(/^:\s*/, '').trim();
 
-    const hari    = lineVal('Hari');
+    const hari = lineVal('Hari');
     const tanggal = lineVal('Tanggal');
-    const pukul   = lineVal('Pukul');
-    const lokasi  = lineVal('Lokasi');
-    const dc      = lineVal('DC');
-    const nb      = get(/NB\s*[:\t ]+([^\n]+(?:\n(?![A-Z*\ud83d\udcdd])[^\n]+)*)/u, content).replace(/^:\s*/, '').trim();
+    const pukul = lineVal('Pukul');
+    const lokasi = lineVal('Lokasi');
+    const dc = lineVal('DC');
+    const nb = get(/NB\s*[:\t ]+([^\n]+(?:\n(?![A-Z*📝])[^\n]+)*)/u, content).replace(/^:\s*/, '').trim();
 
-    // Link Google Drive / Docs — URL apapun yang mengandung drive.google atau docs.google
-    const linkMatch = content.match(/https:\/\/(?:drive|docs)\.google\.com\/[^\s)>"'\n]+/);
-    const link = linkMatch ? linkMatch[0].trim() : '';
-
-    return { nama, angkatan, kegiatan, hari, tanggal, pukul, lokasi, dc, nb, link };
+    return { nama, angkatan, kegiatan, hari, tanggal, pukul, lokasi, dc, nb };
 }
 
 /**
@@ -112,11 +108,11 @@ function applyJarkomReplacements(content, original, newVal) {
         );
     };
 
-    replaceLineVal('Hari',    original.hari,    newVal.hari);
+    replaceLineVal('Hari', original.hari, newVal.hari);
     replaceLineVal('Tanggal', original.tanggal, newVal.tanggal);
-    replaceLineVal('Pukul',   original.pukul,   newVal.pukul);
-    replaceLineVal('Lokasi',  original.lokasi,  newVal.lokasi);
-    replaceLineVal('DC',      original.dc,      newVal.dc);
+    replaceLineVal('Pukul', original.pukul, newVal.pukul);
+    replaceLineVal('Lokasi', original.lokasi, newVal.lokasi);
+    replaceLineVal('DC', original.dc, newVal.dc);
 
     // NB — replace existing, or append before closing salam if newly added
     const hasNBinTemplate = /NB\s*[:\t ]/.test(content);
@@ -130,13 +126,8 @@ function applyJarkomReplacements(content, original, newVal) {
     } else if (newVal.nb) {
         // Append NB before closing wassalam
         const idx = r.lastIndexOf('*Wassalamu');
-        const nbLine = `\n\ud83d\udcdd *NB :*\n${newVal.nb}\n\n`;
-        r = idx > -1 ? r.slice(0, idx) + nbLine + r.slice(idx) : r + `\n\n\ud83d\udcdd *NB :*\n${newVal.nb}`;
-    }
-
-    // Link Google Drive — global replace of the URL
-    if (original.link && newVal.link && original.link !== newVal.link) {
-        r = r.split(original.link).join(newVal.link);
+        const nbLine = `\n📝 *NB :*\n${newVal.nb}\n\n`;
+        r = idx > -1 ? r.slice(0, idx) + nbLine + r.slice(idx) : r + `\n\n📝 *NB :*\n${newVal.nb}`;
     }
 
     return r;
@@ -685,7 +676,7 @@ function showTemplateView(template) {
 function showJarkomForm(template) {
     // 1. Parse nilai-nilai yang sudah ada di template
     const original = parseJarkomFromTemplate(template.content);
-    const isoDate  = parseIDtoISO(original.tanggal);
+    const isoDate = parseIDtoISO(original.tanggal);
 
     // Helper: escape HTML attribute values
     const esc = (s) => (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -779,40 +770,6 @@ function showJarkomForm(template) {
                     <textarea id="jf-nb" class="form-input jarkom-input" rows="2"
                               placeholder="cth: Harap datang 15 menit lebih awal">${esc(original.nb)}</textarea>
                 </div>
-
-                <!-- Link Google Drive (muncul hanya jika template punya link) -->
-                ${original.link ? `
-                <div class="form-group jarkom-full-col">
-                    <label for="jf-link">
-                        <i data-lucide="hard-drive" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>
-                        Link Google Drive <span class="optional-label">(ganti jika perlu)</span>
-                    </label>
-                    <div class="jarkom-link-wrap">
-                        <input type="url" id="jf-link" class="form-input jarkom-input jarkom-link-input"
-                               placeholder="https://drive.google.com/..."
-                               value="${esc(original.link)}">
-                        <a id="jf-link-preview" href="${esc(original.link)}" target="_blank"
-                           class="btn btn-ghost btn-sm jarkom-link-open" title="Buka link">
-                            <i data-lucide="external-link" style="width:14px;height:14px;"></i>
-                        </a>
-                    </div>
-                </div>
-                ` : `
-                <div class="form-group jarkom-full-col">
-                    <label for="jf-link">
-                        <i data-lucide="hard-drive" style="width:13px;height:13px;vertical-align:middle;margin-right:4px;"></i>
-                        Link Google Drive <span class="optional-label">(opsional, jika ada di template)</span>
-                    </label>
-                    <div class="jarkom-link-wrap">
-                        <input type="url" id="jf-link" class="form-input jarkom-input jarkom-link-input"
-                               placeholder="https://drive.google.com/...">
-                        <a id="jf-link-preview" href="#" target="_blank"
-                           class="btn btn-ghost btn-sm jarkom-link-open" title="Buka link" style="opacity:0.35;pointer-events:none;">
-                            <i data-lucide="external-link" style="width:14px;height:14px;"></i>
-                        </a>
-                    </div>
-                </div>
-                `}
             </div>
 
             <!-- Live Preview -->
@@ -827,18 +784,6 @@ function showJarkomForm(template) {
                     </div>
                 </div>
                 <pre id="jarkom-preview" class="jarkom-preview-text">${template.content}</pre>
-            </div>
-
-            <!-- Simpan sebagai template baru -->
-            <div class="jarkom-save-row">
-                <label class="jarkom-save-label">
-                    <input type="checkbox" id="jarkom-save-check">
-                    Simpan hasil sebagai template baru
-                </label>
-                <div id="jarkom-save-title-wrap" style="display:none;margin-top:8px;">
-                    <input type="text" id="jarkom-save-title" class="form-input"
-                           placeholder="Nama template baru...">
-                </div>
             </div>
         </div>
     `;
@@ -887,33 +832,23 @@ function showJarkomForm(template) {
         }
 
         // Wire up text inputs
-        [['jf-nama','nama'],['jf-angkatan','angkatan'],['jf-kegiatan','kegiatan'],
-         ['jf-pukul','pukul'],['jf-lokasi','lokasi'],['jf-dc','dc'],['jf-nb','nb'],['jf-link','link']]
-        .forEach(([id, key]) => {
-            document.getElementById(id)?.addEventListener('input', (e) => {
-                cur[key] = e.target.value;
-                // Update open-link button when link changes
-                if (key === 'link') {
-                    const anchor = document.getElementById('jf-link-preview');
-                    if (anchor) {
-                        const isValid = e.target.value.startsWith('http');
-                        anchor.href = isValid ? e.target.value : '#';
-                        anchor.style.opacity = isValid ? '1' : '0.35';
-                        anchor.style.pointerEvents = isValid ? 'auto' : 'none';
-                    }
-                }
-                updatePreview();
+        [['jf-nama', 'nama'], ['jf-angkatan', 'angkatan'], ['jf-kegiatan', 'kegiatan'],
+        ['jf-pukul', 'pukul'], ['jf-lokasi', 'lokasi'], ['jf-dc', 'dc'], ['jf-nb', 'nb']]
+            .forEach(([id, key]) => {
+                document.getElementById(id)?.addEventListener('input', (e) => {
+                    cur[key] = e.target.value;
+                    updatePreview();
+                });
             });
-        });
 
         // Date picker → auto-fill hari + tanggal
         document.getElementById('jf-tanggal-picker')?.addEventListener('change', (e) => {
             const iso = e.target.value;
             if (!iso) return;
-            const tgl  = formatDateID(iso);
+            const tgl = formatDateID(iso);
             const hari = getHariID(iso);
             cur.tanggal = tgl;
-            cur.hari    = hari;
+            cur.hari = hari;
             const prevEl = document.getElementById('jf-tanggal-preview');
             const hariEl = document.getElementById('jf-hari');
             if (prevEl) prevEl.textContent = tgl;

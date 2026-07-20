@@ -1,4 +1,4 @@
-const CACHE_NAME = 'she-cache-v2';
+const CACHE_NAME = 'she-cache-v3';
 
 const STATIC_ASSETS = [
   './',
@@ -14,8 +14,26 @@ const STATIC_ASSETS = [
   './js/router.js',
   './js/store.js',
   './js/utils.js',
+  './js/mockData.js',
   './js/components/header.js',
   './js/components/sidebar.js',
+  './js/pages/dashboard.js',
+  './js/pages/database.js',
+  './js/pages/documents.js',
+  './js/pages/evaluations.js',
+  './js/pages/programDetail.js',
+  './js/pages/programs.js',
+  './js/pages/settings.js',
+  './js/pages/tasks.js',
+  './js/pages/templates.js',
+  './js/pages/timeline.js',
+  './js/api/database.js',
+  './js/api/documents.js',
+  './js/api/evaluations.js',
+  './js/api/programs.js',
+  './js/api/tasks.js',
+  './js/api/templates.js',
+  './js/api/timeline.js',
   'https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap',
   'https://unpkg.com/lucide@latest/dist/umd/lucide.js'
 ];
@@ -81,7 +99,41 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Cache First for Static Assets (CSS, JS, Fonts, App HTML)
+  // 3. Network First for JS files — ensures code updates are always fetched
+  if (requestUrl.pathname.endsWith('.js')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          return caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          });
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 4. Stale While Revalidate for HTML & CSS
+  if (event.request.mode === 'navigate' || requestUrl.pathname.endsWith('.html') || requestUrl.pathname.endsWith('.css')) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, networkResponse.clone());
+          });
+          return networkResponse;
+        }).catch(() => null);
+
+        // Return cached version immediately, but update in background
+        // If no cached version, wait for network
+        return cachedResponse || fetchPromise || caches.match('./offline.html');
+      })
+    );
+    return;
+  }
+
+  // 5. Cache First for other static assets (fonts, etc.)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -93,7 +145,6 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         });
       }).catch(() => {
-        // Fallback to offline.html if navigation request fails
         if (event.request.mode === 'navigate') {
           return caches.match('./offline.html');
         }
