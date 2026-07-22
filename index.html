@@ -6,7 +6,11 @@
     <meta name="description" content="EEPROM Humas Management System — Sistem manajemen internal Divisi Humas Komunitas EEPROM">
     <meta name="theme-color" content="#6C63FF">
     <title>Login — EEPROM Humas Management System</title>
-    
+    <script>
+        if (localStorage.getItem('eeprom_theme') === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+        }
+    </script>
     <!-- PWA Manifest & Icons -->
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="./images/icon-512.png">
@@ -51,17 +55,7 @@
         <div class="login-brand-panel">
             <div class="brand-content">
                 <div class="brand-logo-wrap">
-                    <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
-                        <rect width="72" height="72" rx="20" fill="url(#loginGrad)"/>
-                        <defs>
-                            <linearGradient id="loginGrad" x1="0" y1="0" x2="72" y2="72">
-                                <stop offset="0%" stop-color="#6C63FF"/>
-                                <stop offset="100%" stop-color="#8B5CF6"/>
-                            </linearGradient>
-                        </defs>
-                        <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="26" font-weight="800" font-family="Poppins,sans-serif">EH</text>
-                    </svg>
-                    <div class="brand-glow"></div>
+                    <img src="./images/eeprom no bg.png" alt="EEPROM Logo" style="width: 72px; height: 72px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(108, 99, 255, 0.5));">
                 </div>
                 
                 <h1 class="brand-title">EEPROM<br><span>Humas</span></h1>

@@ -5,6 +5,7 @@
 
 import { fetchTimeline, createTimelineEvent, updateTimelineEvent, deleteTimelineEvent } from '../api/timeline.js';
 import { fetchPrograms } from '../api/programs.js';
+import { fetchTasks } from '../api/tasks.js';
 import { store, hasPermission } from '../store.js';
 import { toast, confirmDelete, showModal, formatDate, formatDateTime } from '../utils.js';
 import { MOCK_TIMELINE } from '../mockData.js';
@@ -15,13 +16,48 @@ let events = [];
 export async function render(container) {
     container.innerHTML = getSkeletonHTML();
     
-    const [eventsResult, programsResult] = await Promise.all([
+    const [eventsResult, programsResult, tasksResult] = await Promise.all([
         fetchTimeline(),
         fetchPrograms(),
+        fetchTasks()
     ]);
     
-    events = eventsResult.data || [];
+    let baseEvents = eventsResult.data || [];
     const programs = programsResult.data || [];
+    const tasks = tasksResult.data || [];
+    
+    // Inject Programs and Tasks as virtual events
+    programs.forEach(p => {
+        if (p.end_date) {
+            baseEvents.push({
+                id: `prog-${p.id}`,
+                title: `[Program] ${p.name}`,
+                start_datetime: p.end_date,
+                event_type: 'milestone',
+                color: '#6C63FF',
+                is_readonly: true
+            });
+        }
+    });
+    
+    tasks.forEach(t => {
+        if (t.deadline) {
+            let color = '#EF4444'; // default red for not done
+            if (t.status === 'done') color = '#10B981';
+            else if (t.status === 'in_progress' || t.status === 'review') color = '#F59E0B';
+            
+            baseEvents.push({
+                id: `task-${t.id}`,
+                title: `[Task] ${t.title} (${t.assignee_name || 'Unassigned'})`,
+                start_datetime: t.deadline,
+                event_type: 'deadline',
+                color: color,
+                is_readonly: true
+            });
+        }
+    });
+    
+    events = baseEvents;
     
     container.innerHTML = getPageHTML(programs);
     if (window.lucide) lucide.createIcons({ nodes: [container] });
@@ -101,7 +137,7 @@ function renderCalendar() {
     
     // Previous month days
     for (let i = firstDay - 1; i >= 0; i--) {
-        html += `<div class="cal-day other-month">${prevMonthDays - i}</div>`;
+        html += `<div class="cal-day other-month" style="min-width: 0; overflow: hidden;">${prevMonthDays - i}</div>`;
     }
     
     // Current month days
@@ -115,11 +151,18 @@ function renderCalendar() {
         
         const hasEvent = dayEvents.length > 0;
         html += `
-            <div class="cal-day${isToday ? ' today' : ''}${hasEvent ? ' has-event' : ''}" data-date="${date.toISOString().split('T')[0]}">
+            <div class="cal-day${isToday ? ' today' : ''}${hasEvent ? ' has-event' : ''}" data-date="${date.toISOString().split('T')[0]}" style="min-width: 0; overflow: hidden;">
                 <span>${d}</span>
                 ${hasEvent ? `
-                    <div class="cal-event-dots">
-                        ${dayEvents.slice(0, 3).map(e => `<div class="cal-dot" style="background: ${e.color || '#6C63FF'}"></div>`).join('')}
+                    <div style="display:flex; flex-direction:column; gap:2px; width:100%; max-width:100%; margin-top:2px; padding:0 2px; box-sizing:border-box; overflow:hidden;">
+                        ${dayEvents.slice(0, 2).map(e => {
+                            // Coba hapus prefiks [Task] atau [Program] agar teks muat lebih banyak
+                            const shortTitle = e.title.replace(/^\\[.*?\\]\\s*/, '');
+                            return `<div style="background:${e.color || '#6C63FF'}33; color:${e.color || '#6C63FF'}; font-size:9px; font-weight:600; padding:2px 4px; border-radius:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:left; border-left: 2px solid ${e.color || '#6C63FF'}; max-width:100%; box-sizing:border-box;">
+                                ${shortTitle}
+                            </div>`;
+                        }).join('')}
+                        ${dayEvents.length > 2 ? `<div style="font-size:9px; color:var(--text-muted); font-weight:600; text-align:center;">+${dayEvents.length - 2}</div>` : ''}
                     </div>
                 ` : ''}
             </div>
@@ -130,7 +173,7 @@ function renderCalendar() {
     const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
     const remaining = totalCells - (firstDay + daysInMonth);
     for (let d = 1; d <= remaining; d++) {
-        html += `<div class="cal-day other-month">${d}</div>`;
+        html += `<div class="cal-day other-month" style="min-width: 0; overflow: hidden;">${d}</div>`;
     }
     
     html += `</div>`;
@@ -154,9 +197,36 @@ function renderCalendar() {
 
 function renderEventList(filteredEvents = null, dateLabel = null) {
     const list = document.getElementById('event-list');
+    const badge = document.getElementById('events-count');
+    const cardTitle = document.querySelector('.timeline-events-panel .card-title');
     if (!list) return;
     
-    const toShow = filteredEvents || events;
+    let toShow = filteredEvents;
+    
+    // Filter berdasarkan bulan aktif jika tidak ada tanggal spesifik yang diklik
+    if (!toShow) {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        toShow = events.filter(e => {
+            if (!e.start_datetime) return false;
+            const d = new Date(e.start_datetime);
+            return d.getFullYear() === year && d.getMonth() === month;
+        });
+        
+        if (cardTitle) {
+            const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            cardTitle.innerHTML = `<i data-lucide="calendar"></i> Event ${monthNames[month]} ${year}`;
+        }
+    } else if (dateLabel && cardTitle) {
+        const d = new Date(dateLabel);
+        if (!isNaN(d)) {
+            const dStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+            cardTitle.innerHTML = `<i data-lucide="calendar"></i> Event ${dStr}`;
+        }
+    }
+    
+    if (badge) badge.textContent = toShow.length;
+    
     const sorted = [...toShow].sort((a, b) => new Date(a.start_datetime) - new Date(b.start_datetime));
     
     if (sorted.length === 0) {
@@ -190,7 +260,7 @@ function renderEventList(filteredEvents = null, dateLabel = null) {
             <div class="event-type-icon" style="color: ${event.color || '#6C63FF'}">
                 <i data-lucide="${eventTypeIcons[event.event_type] || 'calendar'}"></i>
             </div>
-            ${hasPermission('timeline', 'delete') ? `
+            ${hasPermission('timeline', 'delete') && !event.is_readonly ? `
                 <button class="btn-icon btn-sm text-danger" data-action="delete-event" data-id="${event.id}" data-title="${event.title}">
                     <i data-lucide="trash-2"></i>
                 </button>

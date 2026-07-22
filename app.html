@@ -6,7 +6,11 @@
     <meta name="description" content="EEPROM Humas Management System — Dashboard">
     <meta name="theme-color" content="#6C63FF">
     <title>Dashboard — EEPROM Humas Management System</title>
-    
+    <script>
+        if (localStorage.getItem('eeprom_theme') === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+        }
+    </script>
     <!-- PWA Manifest & Icons -->
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="./images/icon-512.png">

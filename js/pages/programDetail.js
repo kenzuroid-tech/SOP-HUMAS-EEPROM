@@ -52,7 +52,14 @@ export async function render(container, params) {
     const evaluation = evalResult.data;
     const checklist = checklistResult.data || [];
     
+    const user = store.get('user');
     const canEditProgram = hasPermission('programs', 'edit') || user?.role === 'super_admin' || user?.role === 'ketua_humas';
+    
+    let calculatedProgress = 0;
+    if (tasks.length > 0) {
+        const doneCount = tasks.filter(t => t.status === 'done').length;
+        calculatedProgress = Math.round((doneCount / tasks.length) * 100);
+    }
     
     container.innerHTML = `
         <!-- Program Header -->
@@ -81,9 +88,9 @@ export async function render(container, params) {
                     <p class="text-muted">${program.description || ''}</p>
                 </div>
                 <div class="program-detail-progress">
-                    <div class="circular-progress" style="--progress: ${program.progress || 0}; --color: ${color}">
+                    <div class="circular-progress" style="--progress: ${calculatedProgress}; --color: ${color}">
                         <div class="circular-progress-inner">
-                            <span class="circular-value" style="color: ${color}">${program.progress || 0}%</span>
+                            <span class="circular-value" style="color: ${color}">${calculatedProgress}%</span>
                             <span class="circular-label">Progress</span>
                         </div>
                     </div>

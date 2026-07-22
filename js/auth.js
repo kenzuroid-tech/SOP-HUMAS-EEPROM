@@ -85,8 +85,8 @@ export async function login(email, password) {
             const user = demoUsers[email];
             store.set({ user, isAuthenticated: true });
             
-            // Save to session
-            sessionStorage.setItem('eeprom_user', JSON.stringify(user));
+            // Save to localStorage (bukan sessionStorage) agar session bertahan di PWA
+            localStorage.setItem('eeprom_user', JSON.stringify(user));
             
             hideLoading();
             toast.success(`Selamat datang, ${user.full_name}! 🎉`);
@@ -100,6 +100,24 @@ export async function login(email, password) {
         
         // Fetch profile
         const profile = await fetchProfile(data.user.id);
+        
+        // Load notifications from DB
+        if (!APP_CONFIG.demoMode && supabaseClient) {
+            const { data: notifs } = await supabaseClient
+                .from('notifications')
+                .select('*')
+                .eq('user_id', data.user.id)
+                .order('created_at', { ascending: false })
+                .limit(20);
+                
+            if (notifs) {
+                store.set({ 
+                    notifications: notifs,
+                    unreadNotifications: notifs.filter(n => !n.is_read).length
+                });
+            }
+        }
+        
         store.set({ user: profile, isAuthenticated: true });
         
         // Log activity
@@ -127,16 +145,22 @@ export async function logout() {
             await supabaseClient.auth.signOut();
         }
         
+        // Hapus semua storage
+        localStorage.removeItem('eeprom_user');
         sessionStorage.removeItem('eeprom_user');
         store.reset();
         
-        hideLoading();
-        
-        // Redirect to login
-        window.location.href = './index.html';
+        // Redirect ke halaman login — gunakan origin agar tidak salah path
+        const loginUrl = window.location.origin + window.location.pathname.replace(/\/app\.html.*/, '') + '/index.html';
+        window.location.replace(loginUrl);
     } catch (error) {
+        console.error('Logout error:', error);
+        // Force redirect meski ada error
+        localStorage.removeItem('eeprom_user');
+        sessionStorage.removeItem('eeprom_user');
+        window.location.replace('./index.html');
+    } finally {
         hideLoading();
-        toast.error('Gagal keluar. Silakan coba lagi.');
     }
 }
 
@@ -145,13 +169,15 @@ export async function logout() {
  * Returns true if authenticated
  */
 export async function checkSession() {
-    // Demo mode: check sessionStorage
+    // Demo mode: check localStorage (persistent) lalu sessionStorage (fallback)
     if (APP_CONFIG.demoMode) {
-        const stored = sessionStorage.getItem('eeprom_user');
+        const stored = localStorage.getItem('eeprom_user') || sessionStorage.getItem('eeprom_user');
         if (stored) {
             try {
                 const user = JSON.parse(stored);
                 store.set({ user, isAuthenticated: true });
+                // Migrate ke localStorage jika masih di sessionStorage
+                localStorage.setItem('eeprom_user', JSON.stringify(user));
                 return true;
             } catch (_) {}
         }
@@ -165,6 +191,24 @@ export async function checkSession() {
         const { data: { session } } = await supabaseClient.auth.getSession();
         if (session) {
             const profile = await fetchProfile(session.user.id);
+            
+            // Load notifications from DB
+            if (!APP_CONFIG.demoMode && supabaseClient) {
+                const { data: notifs } = await supabaseClient
+                    .from('notifications')
+                    .select('*')
+                    .eq('user_id', session.user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+                    
+                if (notifs) {
+                    store.set({ 
+                        notifications: notifs,
+                        unreadNotifications: notifs.filter(n => !n.is_read).length
+                    });
+                }
+            }
+            
             store.set({ user: profile, isAuthenticated: true });
             return true;
         }
@@ -184,6 +228,24 @@ export function onAuthStateChange(callback) {
     const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
             const profile = await fetchProfile(session.user.id);
+            
+            // Load notifications from DB
+            if (!APP_CONFIG.demoMode && supabaseClient) {
+                const { data: notifs } = await supabaseClient
+                    .from('notifications')
+                    .select('*')
+                    .eq('user_id', session.user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+                    
+                if (notifs) {
+                    store.set({ 
+                        notifications: notifs,
+                        unreadNotifications: notifs.filter(n => !n.is_read).length
+                    });
+                }
+            }
+            
             store.set({ user: profile, isAuthenticated: true });
             callback('SIGNED_IN', profile);
         } else if (event === 'SIGNED_OUT') {
@@ -244,7 +306,8 @@ export async function updateProfile(updates) {
         await simulateDelay(600);
         const updatedUser = { ...user, ...updates };
         store.set({ user: updatedUser });
-        sessionStorage.setItem('eeprom_user', JSON.stringify(updatedUser));
+        // Simpan ke localStorage untuk PWA persistence
+        localStorage.setItem('eeprom_user', JSON.stringify(updatedUser));
         return { data: updatedUser, error: null };
     }
     

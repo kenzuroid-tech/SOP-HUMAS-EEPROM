@@ -83,9 +83,9 @@ function renderNavItems(user) {
             // Collapsible section
             const isOpen = currentPage && item.children.some(c => c.path.includes(currentPage));
             li.innerHTML = `
-                <button class="nav-link nav-parent${isOpen ? ' open' : ''}" data-nav-id="${item.id}">
+                <button class="nav-link nav-parent${isOpen ? ' open' : ''}" data-nav-id="${item.id}" style="background: transparent; border: none; width: 100%; text-align: left; font-family: inherit; color: inherit; margin: 0;">
                     <span class="nav-icon"><i data-lucide="${item.icon}"></i></span>
-                    <span class="nav-label">${item.label}</span>
+                    <span class="nav-label" style="flex: 1;">${item.label}</span>
                     <span class="nav-arrow"><i data-lucide="chevron-right"></i></span>
                 </button>
                 <ul class="nav-children${isOpen ? ' open' : ''}" id="nav-children-${item.id}">

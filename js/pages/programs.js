@@ -3,15 +3,35 @@
  * Programs List Page
  */
 
-import { fetchPrograms } from '../api/programs.js';
-import { store } from '../store.js';
+import { fetchPrograms, createProgram } from '../api/programs.js';
+import { fetchTasks } from '../api/tasks.js';
+import { store, hasPermission } from '../store.js';
 import { PROGRAMS, PROGRAM_STATUS } from '../config.js';
-import { getProgressColor, formatDate } from '../utils.js';
+import { getProgressColor, formatDate, showModal, toast } from '../utils.js';
 
 export async function render(container) {
     container.innerHTML = getSkeletonHTML();
     
-    const { data: programs } = await fetchPrograms();
+    const [programsResult, tasksResult] = await Promise.all([
+        fetchPrograms(),
+        fetchTasks()
+    ]);
+    const programs = programsResult.data || [];
+    const tasks = tasksResult.data || [];
+    
+    // Hitung progres secara dinamis
+    programs.forEach(p => {
+        const pTasks = tasks.filter(t => t.program_id === p.id);
+        if (pTasks.length > 0) {
+            const doneCount = pTasks.filter(t => t.status === 'done').length;
+            p.progress = Math.round((doneCount / pTasks.length) * 100);
+        } else {
+            p.progress = 0;
+        }
+    });
+    
+    const user = store.get('user');
+    const canCreate = hasPermission('programs', 'create') || user?.role === 'super_admin' || user?.role === 'ketua_humas';
     
     container.innerHTML = `
         <div class="page-header">
@@ -19,6 +39,11 @@ export async function render(container) {
                 <h1 class="page-title">Program Kerja</h1>
                 <p class="page-subtitle">Kelola seluruh program kerja Divisi Humas EEPROM</p>
             </div>
+            ${canCreate ? `
+                <button class="btn btn-primary" id="add-program-btn">
+                    <i data-lucide="plus"></i> Tambah Program
+                </button>
+            ` : ''}
         </div>
         
         <!-- Summary Stats -->
@@ -51,6 +76,66 @@ export async function render(container) {
             el.style.width = el.dataset.width + '%';
         });
     }, 200);
+    
+    const addBtn = document.getElementById('add-program-btn');
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            showModal({
+                title: 'Tambah Program Kerja',
+                content: `
+                    <form id="program-form" class="form">
+                        <div class="form-group">
+                            <label>Nama Program *</label>
+                            <input type="text" name="name" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Kode / Alias * (Singkatan, misal: PRASTUDI)</label>
+                            <input type="text" name="code" class="form-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Deskripsi</label>
+                            <textarea name="description" class="form-input" rows="3"></textarea>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Tanggal Mulai</label>
+                                <input type="date" name="start_date" class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label>Tanggal Selesai</label>
+                                <input type="date" name="end_date" class="form-input">
+                            </div>
+                        </div>
+                    </form>
+                `,
+                confirmText: 'Simpan Program',
+                onConfirm: async () => {
+                    const form = document.getElementById('program-form');
+                    const formData = new FormData(form);
+                    const data = {
+                        name: formData.get('name'),
+                        code: formData.get('code').toUpperCase(),
+                        description: formData.get('description'),
+                        start_date: formData.get('start_date') || null,
+                        end_date: formData.get('end_date') || null,
+                        status: 'planning',
+                    };
+                    if (!data.name || !data.code) {
+                        toast.error('Nama dan Kode program wajib diisi!');
+                        return false; // Jangan tutup modal
+                    }
+                    const res = await createProgram(data);
+                    if (res.error) {
+                        toast.error('Gagal menambahkan program');
+                        return false;
+                    }
+                    toast.success('Program berhasil ditambahkan');
+                    render(container);
+                    return true;
+                }
+            });
+        });
+    }
 }
 
 function getProgramCard(program) {

@@ -3,7 +3,7 @@
  * Task Management Page
  */
 
-import { fetchTasks, createTask, updateTask, deleteTask, updateTaskStatus } from '../api/tasks.js';
+import { fetchTasks, createTask, updateTask, deleteTask, updateTaskStatus, submitTransferRequest, markTaskDoneWithProof } from '../api/tasks.js';
 import { fetchPrograms } from '../api/programs.js';
 import { store, hasPermission } from '../store.js';
 import { TASK_STATUS, TASK_PRIORITY } from '../config.js';
@@ -184,9 +184,6 @@ function renderTaskList() {
     }
     
     if (window.lucide) lucide.createIcons({ nodes: [container] });
-    
-    // Setup task card events
-    setupTaskCardEvents(container);
 }
 
 function getTaskCard(task) {
@@ -226,34 +223,63 @@ function getTaskCard(task) {
             </div>
             
             <div class="task-card-footer">
-                <div class="task-card-assignee">
-                    ${task.assignee_name ? `
-                        <div class="avatar avatar-xs" style="background: #6C63FF22; color: #6C63FF">
-                            ${task.assignee_name.charAt(0)}
+                <div class="task-card-footer-top">
+                    <div class="task-card-assignee">
+                        ${task.assignee_name ? `
+                            <div class="avatar avatar-xs" style="background: #6C63FF22; color: #6C63FF">
+                                ${task.assignee_name.charAt(0)}
+                            </div>
+                            <span class="text-sm">${task.assignee_nickname || task.assignee_name.split(' ')[0]}</span>
+                        ` : '<span class="text-sm text-muted">Unassigned</span>'}
+                    </div>
+                    
+                    ${task.deadline ? `
+                        <div class="task-deadline ${isOverdue ? 'text-danger' : daysLeft <= 3 ? 'text-warning' : 'text-muted'}">
+                            <i data-lucide="clock"></i>
+                            ${isOverdue ? 'Terlambat!' : daysLeft === 0 ? 'Hari ini' : daysLeft === 1 ? 'Besok' : formatDate(task.deadline, { day: 'numeric', month: 'short' })}
                         </div>
-                        <span class="text-sm">${task.assignee_nickname || task.assignee_name.split(' ')[0]}</span>
-                    ` : '<span class="text-sm text-muted">Unassigned</span>'}
+                    ` : ''}
                 </div>
                 
-                ${task.deadline ? `
-                    <div class="task-deadline ${isOverdue ? 'text-danger' : daysLeft <= 3 ? 'text-warning' : 'text-muted'}">
-                        <i data-lucide="clock"></i>
-                        ${isOverdue ? 'Terlambat!' : daysLeft === 0 ? 'Hari ini' : daysLeft === 1 ? 'Besok' : formatDate(task.deadline, { day: 'numeric', month: 'short' })}
-                    </div>
-                ` : ''}
-                
                 <div class="task-card-actions">
-                    <button class="btn-icon btn-sm" title="Edit" data-action="edit" data-id="${task.id}">
-                        <i data-lucide="edit"></i>
-                    </button>
-                    <button class="btn-icon btn-sm" title="Ubah Status" data-action="status" data-id="${task.id}" data-status="${task.status}">
-                        <i data-lucide="refresh-cw"></i>
-                    </button>
-                    ${hasPermission('tasks', 'delete') ? `
-                        <button class="btn-icon btn-sm text-danger" title="Hapus" data-action="delete" data-id="${task.id}" data-title="${task.title}">
-                            <i data-lucide="trash-2"></i>
-                        </button>
-                    ` : ''}
+                    ${(() => {
+                        const currentUser = store.get('user');
+                        if (!currentUser) return '';
+                        
+                        const isAdmin = currentUser.role === 'super_admin' || currentUser.role === 'ketua_humas';
+                        const isOwner = task.assigned_to === currentUser.id;
+                        
+                        let buttons = '';
+                        
+                        if (isAdmin || isOwner) {
+                            buttons += `
+                                <button class="btn btn-ghost btn-sm" title="Ubah Status" data-action="status" data-id="${task.id}" data-status="${task.status}">
+                                    <i data-lucide="refresh-cw"></i> Status
+                                </button>
+                            `;
+                        }
+                        
+                        if (isAdmin) {
+                            buttons += `
+                                <button class="btn btn-ghost btn-sm" title="Edit" data-action="edit" data-id="${task.id}">
+                                    <i data-lucide="edit"></i> Edit
+                                </button>
+                                <button class="btn btn-ghost btn-sm text-danger" title="Hapus" data-action="delete" data-id="${task.id}" data-title="${task.title}">
+                                    <i data-lucide="trash-2"></i> Hapus
+                                </button>
+                            `;
+                        }
+                        
+                        if (!isAdmin && !isOwner) {
+                            buttons += `
+                                <button class="btn btn-ghost btn-sm" title="Ajukan Pergantian Tugas" data-action="transfer_request" data-id="${task.id}" data-owner="${task.assigned_to}">
+                                    <i data-lucide="user-plus"></i> Ambil Alih
+                                </button>
+                            `;
+                        }
+                        
+                        return buttons;
+                    })()}
                 </div>
             </div>
         </div>
@@ -294,7 +320,6 @@ function renderKanban(container, tasks) {
     `;
     
     if (window.lucide) lucide.createIcons({ nodes: [container] });
-    setupTaskCardEvents(container);
 }
 
 function getKanbanCard(task) {
@@ -307,8 +332,28 @@ function getKanbanCard(task) {
             ${task.assignee_name ? `<div class="kanban-assignee text-xs text-muted"><i data-lucide="user"></i> ${task.assignee_name}</div>` : ''}
             ${task.deadline ? `<div class="kanban-deadline text-xs"><i data-lucide="clock"></i> ${formatDate(task.deadline, { day: 'numeric', month: 'short' })}</div>` : ''}
             <div class="kanban-card-actions">
-                <button class="btn-icon btn-xs" data-action="edit" data-id="${task.id}"><i data-lucide="edit"></i></button>
-                <button class="btn-icon btn-xs text-danger" data-action="delete" data-id="${task.id}" data-title="${task.title}"><i data-lucide="trash-2"></i></button>
+                ${(() => {
+                    const currentUser = store.get('user');
+                    if (!currentUser) return '';
+                    
+                    const isAdmin = currentUser.role === 'super_admin' || currentUser.role === 'ketua_humas';
+                    const isOwner = task.assigned_to === currentUser.id;
+                    
+                    let buttons = '';
+                    
+                    if (isAdmin) {
+                        buttons += `
+                            <button class="btn-icon btn-xs" data-action="edit" data-id="${task.id}" title="Edit"><i data-lucide="edit"></i></button>
+                            <button class="btn-icon btn-xs text-danger" data-action="delete" data-id="${task.id}" data-title="${task.title}" title="Hapus"><i data-lucide="trash-2"></i></button>
+                        `;
+                    } else if (!isOwner) {
+                        buttons += `
+                            <button class="btn-icon btn-xs" data-action="transfer_request" data-id="${task.id}" data-owner="${task.assigned_to}" title="Ambil Alih"><i data-lucide="user-plus"></i></button>
+                        `;
+                    }
+                    
+                    return buttons;
+                })()}
             </div>
         </div>
     `;
@@ -493,49 +538,223 @@ function setupEvents(programs) {
         document.getElementById('list-view-btn').classList.remove('active');
         renderTaskList();
     });
-}
-
-function setupTaskCardEvents(container) {
-    container.addEventListener('click', async (e) => {
-        const btn = e.target.closest('[data-action]');
-        if (!btn) return;
-        
-        const action = btn.dataset.action;
-        const id = btn.dataset.id;
-        const task = allTasks.find(t => t.id === id);
-        
-        if (action === 'edit' && task) {
-            const { data: programs } = await fetchPrograms();
-            await showTaskForm(task, programs);
-        }
-        
-        if (action === 'delete') {
-            const title = btn.dataset.title || 'task ini';
-            confirmDelete(title, async () => {
-                const { error } = await deleteTask(id);
+    
+    // Task card action events — delegated ONCE on #task-content
+    const taskContent = document.getElementById('task-content');
+    if (taskContent) {
+        taskContent.addEventListener('click', async (e) => {
+            const btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            
+            const action = btn.dataset.action;
+            const id = btn.dataset.id;
+            const task = allTasks.find(t => t.id === id);
+            
+            if (action === 'edit' && task) {
+                const { data: programs } = await fetchPrograms();
+                await showTaskForm(task, programs);
+            }
+            
+            if (action === 'delete') {
+                const title = btn.dataset.title || 'task ini';
+                confirmDelete(title, async () => {
+                    const { error } = await deleteTask(id);
+                    if (error) {
+                        toast.error('Gagal menghapus task');
+                    } else {
+                        toast.success('Task berhasil dihapus');
+                        allTasks = store.get('tasks');
+                        renderTaskList();
+                    }
+                });
+            }
+            
+            if (action === 'status' && task) {
+                // Task Done tidak bisa diubah kembali
+                if (task.status === 'done') {
+                    toast.warning('Task sudah selesai dan tidak dapat diubah kembali.');
+                    return;
+                }
+                
+                const statuses = ['todo', 'in_progress', 'review', 'done'];
+                const currentIdx = statuses.indexOf(task.status);
+                const nextStatus = statuses[(currentIdx + 1) % statuses.length];
+                
+                // Jika next status adalah DONE → wajib upload bukti foto
+                if (nextStatus === 'done') {
+                    showTaskProofModal(task, async (file) => {
+                        if (!file) {
+                            toast.warning('Bukti foto wajib diunggah untuk menyelesaikan task.');
+                            return;
+                        }
+                        const { error } = await markTaskDoneWithProof(task.id, file);
+                        if (error) {
+                            toast.error('Gagal menyelesaikan task');
+                        } else {
+                            toast.success('Task berhasil diselesaikan! 🎉');
+                            allTasks = store.get('tasks');
+                            renderTaskList();
+                        }
+                    });
+                    return;
+                }
+                
+                const { error } = await updateTaskStatus(id, nextStatus);
                 if (error) {
-                    toast.error('Gagal menghapus task');
+                    toast.error('Gagal mengubah status');
                 } else {
-                    toast.success('Task berhasil dihapus');
+                    toast.success(`Status diubah ke ${TASK_STATUS[nextStatus].label}`);
                     allTasks = store.get('tasks');
                     renderTaskList();
                 }
-            });
-        }
-        
-        if (action === 'status' && task) {
-            const statuses = ['todo', 'in_progress', 'review', 'done'];
-            const currentIdx = statuses.indexOf(task.status);
-            const nextStatus = statuses[(currentIdx + 1) % statuses.length];
-            const { error } = await updateTaskStatus(id, nextStatus);
-            if (error) {
-                toast.error('Gagal mengubah status');
-            } else {
-                toast.success(`Status diubah ke ${TASK_STATUS[nextStatus].label}`);
-                allTasks = store.get('tasks');
-                renderTaskList();
             }
+            
+            if (action === 'transfer_request' && task) {
+                const formHTML = `
+                    <div class="form-group">
+                        <p class="text-muted" style="margin-bottom:0.75rem">
+                            Mengajukan alih tugas untuk: <strong>${task.title}</strong><br>
+                            Pemilik: <strong>${task.assignee_name || 'Tidak diketahui'}</strong>
+                        </p>
+                        <label>Alasan Pengambilalihan Tugas *</label>
+                        <textarea id="transfer-reason" class="form-input" rows="3" placeholder="Jelaskan alasan mengapa Anda ingin mengambil alih task ini..." required></textarea>
+                        <p class="text-xs text-muted mt-2">Request ini akan dikirimkan ke pemilik task saat ini untuk disetujui.</p>
+                    </div>
+                `;
+                
+                showModal({
+                    title: 'Ajukan Pergantian Tugas',
+                    content: formHTML,
+                    confirmText: 'Ajukan Request',
+                    onConfirm: async () => {
+                        const reason = document.getElementById('transfer-reason').value;
+                        if (!reason.trim()) {
+                            toast.warning('Alasan tidak boleh kosong');
+                            return false; // Jangan tutup modal
+                        }
+                        
+                        const { error } = await submitTransferRequest(id, btn.dataset.owner, reason);
+                        if (error) {
+                            toast.error('Gagal mengajukan pergantian tugas: ' + (error.message || error));
+                        } else {
+                            toast.success('Request berhasil diajukan! Menunggu persetujuan owner.');
+                        }
+                    }
+                });
+            }
+        });
+    }
+}
+
+// ============================================================
+// PROOF MODAL — Upload bukti foto saat task Done
+// ============================================================
+
+function showTaskProofModal(task, onConfirm) {
+    document.getElementById('task-proof-modal')?.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'task-proof-modal';
+    modal.className = 'modal-overlay proof-modal-overlay';
+    modal.innerHTML = `
+        <div class="modal proof-modal">
+            <div class="modal-header">
+                <h3 class="modal-title"><i data-lucide="camera"></i> Upload Bukti Penyelesaian</h3>
+                <button class="btn-icon" id="tpm-close"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="proof-task-info">
+                    <i data-lucide="check-square" style="color:#10B981"></i>
+                    <span>Menyelesaikan: <strong>${task.title}</strong></span>
+                </div>
+                <p class="text-muted" style="margin: 0.75rem 0 1rem">
+                    Unggah foto/screenshot sebagai bukti bahwa task ini telah diselesaikan.
+                    Setelah dikonfirmasi, <strong>status tidak bisa dikembalikan.</strong>
+                </p>
+                <div class="proof-upload-area" id="tpm-upload-area">
+                    <input type="file" id="tpm-file-input" accept="image/*" style="display:none">
+                    <div class="proof-upload-placeholder" id="tpm-placeholder">
+                        <i data-lucide="upload-cloud"></i>
+                        <p>Klik atau drag &amp; drop foto di sini</p>
+                        <span class="text-xs text-muted">JPG, PNG, WEBP — maks. 2MB</span>
+                    </div>
+                    <div class="proof-preview" id="tpm-preview" style="display:none">
+                        <img id="tpm-preview-img" src="" alt="Preview bukti">
+                        <button class="proof-remove-btn" id="tpm-remove" title="Hapus foto">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="tpm-cancel">Batal</button>
+                <button class="btn btn-success" id="tpm-confirm" disabled>
+                    <i data-lucide="check-circle"></i> Selesaikan Task
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    if (window.lucide) lucide.createIcons({ nodes: [modal] });
+    requestAnimationFrame(() => modal.classList.add('modal-open'));
+    
+    let selectedFile = null;
+    
+    const fileInput  = modal.querySelector('#tpm-file-input');
+    const uploadArea = modal.querySelector('#tpm-upload-area');
+    const placeholder= modal.querySelector('#tpm-placeholder');
+    const preview    = modal.querySelector('#tpm-preview');
+    const previewImg = modal.querySelector('#tpm-preview-img');
+    const confirmBtn = modal.querySelector('#tpm-confirm');
+    
+    function setFile(file) {
+        if (!file.type.startsWith('image/')) { 
+            toast.warning('File harus berupa gambar (JPG/PNG/WEBP)'); 
+            return; 
         }
+        if (file.size > 2 * 1024 * 1024) { 
+            toast.warning('Ukuran file maksimal 2MB'); 
+            return; 
+        }
+        selectedFile = file;
+        previewImg.src = URL.createObjectURL(file);
+        placeholder.style.display = 'none';
+        preview.style.display = 'block';
+        confirmBtn.disabled = false;
+    }
+    
+    uploadArea.addEventListener('click', (e) => { 
+        if (!e.target.closest('#tpm-remove')) fileInput.click(); 
+    });
+    uploadArea.addEventListener('dragover',  (e) => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+    uploadArea.addEventListener('dragleave', ()  => uploadArea.classList.remove('drag-over'));
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault(); uploadArea.classList.remove('drag-over');
+        const f = e.dataTransfer.files[0]; if (f) setFile(f);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+    
+    modal.querySelector('#tpm-remove').addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedFile = null; fileInput.value = ''; previewImg.src = '';
+        placeholder.style.display = 'flex'; preview.style.display = 'none';
+        confirmBtn.disabled = true;
+    });
+    
+    function closeModal() { modal.classList.remove('modal-open'); setTimeout(() => modal.remove(), 300); }
+    
+    modal.querySelector('#tpm-close').addEventListener('click', closeModal);
+    modal.querySelector('#tpm-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    
+    confirmBtn.addEventListener('click', async () => {
+        if (!selectedFile) return;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i data-lucide="loader"></i> Menyimpan...';
+        if (window.lucide) lucide.createIcons({ nodes: [confirmBtn] });
+        closeModal();
+        await onConfirm(selectedFile);
     });
 }
 

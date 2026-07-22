@@ -73,6 +73,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
+          if (event.request.method !== 'GET') {
+              return response; // Do not cache POST/PATCH/DELETE
+          }
           return caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, response.clone());
             return response;

@@ -5,6 +5,8 @@
  * Simple pub/sub state management without framework
  */
 
+import { MOCK_ACTIVITY_LOGS } from './mockData.js';
+
 // ============================================================
 // INITIAL STATE
 // ============================================================
@@ -30,7 +32,7 @@ const initialState = {
     participants: [],
     evaluations: [],
     members: [],
-    activityLogs: [],
+    activityLogs: [...MOCK_ACTIVITY_LOGS],
     notifications: [],
     unreadNotifications: 0,
     
@@ -133,7 +135,14 @@ class Store {
      * Reset state to initial
      */
     reset() {
-        this.set(initialState);
+        const preservedNotifications = this.get('notifications') || [];
+        const preservedTransferRequests = this.get('transfer_requests') || [];
+        
+        this.set({
+            ...initialState,
+            notifications: preservedNotifications,
+            transfer_requests: preservedTransferRequests
+        });
     }
     
     /**

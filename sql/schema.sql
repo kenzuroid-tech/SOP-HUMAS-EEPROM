@@ -365,6 +365,24 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 -- ============================================================
+-- TABLE: task_transfer_requests
+-- Request pergantian tugas antar user
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS task_transfer_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    requester_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    reason TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    approved_at TIMESTAMPTZ,
+    rejected_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
 -- INDEXES for Performance
 -- ============================================================
 
@@ -411,6 +429,7 @@ CREATE TRIGGER trg_templates_updated_at BEFORE UPDATE ON templates FOR EACH ROW 
 CREATE TRIGGER trg_documents_updated_at BEFORE UPDATE ON documents FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_evaluations_updated_at BEFORE UPDATE ON evaluations FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_participants_updated_at BEFORE UPDATE ON participants FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_task_transfer_reqs_updated_at BEFORE UPDATE ON task_transfer_requests FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Auto-create profile on new user signup
 CREATE OR REPLACE FUNCTION handle_new_user()
@@ -526,6 +545,7 @@ ALTER TABLE participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE freshman_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE task_transfer_requests ENABLE ROW LEVEL SECURITY;
 
 -- Helper function to get current user role
 CREATE OR REPLACE FUNCTION get_user_role()
@@ -606,6 +626,17 @@ CREATE POLICY "activity_logs_insert_auth" ON activity_logs FOR INSERT WITH CHECK
 CREATE POLICY "notifications_own" ON notifications FOR ALL USING (user_id = auth.uid());
 CREATE POLICY "notifications_send_admin" ON notifications FOR INSERT WITH CHECK (
     get_user_role() IN ('super_admin', 'ketua_humas') OR sent_by = auth.uid()
+);
+
+-- TASK_TRANSFER_REQUESTS policies
+CREATE POLICY "task_transfers_select" ON task_transfer_requests FOR SELECT USING (
+    requester_id = auth.uid() OR owner_id = auth.uid() OR get_user_role() IN ('super_admin', 'ketua_humas')
+);
+CREATE POLICY "task_transfers_insert" ON task_transfer_requests FOR INSERT WITH CHECK (
+    requester_id = auth.uid()
+);
+CREATE POLICY "task_transfers_update" ON task_transfer_requests FOR UPDATE USING (
+    owner_id = auth.uid() OR get_user_role() IN ('super_admin', 'ketua_humas')
 );
 
 -- ============================================================

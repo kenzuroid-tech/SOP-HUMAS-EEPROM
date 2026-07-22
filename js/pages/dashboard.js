@@ -5,9 +5,9 @@
 
 import { store, getTaskStats, getUpcomingDeadlines, getAvgProgress } from '../store.js';
 import { fetchPrograms } from '../api/programs.js';
-import { fetchTasks } from '../api/tasks.js';
+import { fetchTasks, fetchTransferRequests, fetchActivityLogs } from '../api/tasks.js';
 import { formatDate, formatRelativeTime, formatDateTime, createProgressBar, getProgressColor } from '../utils.js';
-import { MOCK_STATS, MOCK_ACTIVITY_LOGS } from '../mockData.js';
+import { MOCK_STATS } from '../mockData.js';
 import { APP_CONFIG, TASK_STATUS, TASK_PRIORITY } from '../config.js';
 import { getSupabase } from '../auth.js';
 
@@ -18,19 +18,23 @@ import { getSupabase } from '../auth.js';
 export async function render(container) {
     container.innerHTML = getSkeletonHTML();
     
-    // Fetch data
-    const [programsResult, tasksResult] = await Promise.all([
+    // Fetch data secara paralel
+    const [programsResult, tasksResult, transfersResult, activityResult] = await Promise.all([
         fetchPrograms(),
         fetchTasks(),
+        fetchTransferRequests(),
+        fetchActivityLogs(10),
     ]);
     
     const programs = programsResult.data || [];
     const tasks = tasksResult.data || [];
+    const transferRequests = transfersResult.data || [];
+    const activityLogs = activityResult.data || [];
     const stats = APP_CONFIG.demoMode ? MOCK_STATS : await fetchStats();
     const taskStats = getTaskStats(tasks);
     const upcomingDeadlines = getUpcomingDeadlines(tasks);
     
-    container.innerHTML = getDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats);
+    container.innerHTML = getDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats, transferRequests, activityLogs);
     
     // Init charts
     initCharts(programs, taskStats);
@@ -43,21 +47,34 @@ export async function render(container) {
     
     // Animate stats
     animateCounters();
+    
+    // Init interactive events (untuk dashboard anggota)
+    initDashboardEvents(container, tasks);
 }
 
 // ============================================================
 // HTML TEMPLATE
 // ============================================================
 
-function getDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats) {
+function getDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats, transferRequests, activityLogs) {
     const user = store.get('user');
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Selamat Pagi' : hour < 17 ? 'Selamat Siang' : 'Selamat Malam';
     
+    const isAdmin = user?.role === 'super_admin' || user?.role === 'ketua_humas';
+    
+    if (isAdmin) {
+        return getAdminDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats, greeting, user, transferRequests, activityLogs);
+    } else {
+        return getStaffDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, greeting, user, transferRequests);
+    }
+}
+
+function getAdminDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats, greeting, user, transferRequests, activityLogs) {
     return `
         <div class="page-header">
             <div>
-                <h1 class="page-title">${greeting}, ${user?.nickname || user?.full_name?.split(' ')[0] || 'Tim'}! 👋</h1>
+                <h1 class="page-title">${greeting}, ${user?.nickname || user?.full_name?.split(' ')[0] || 'Tim'}! 👋 (Super Admin)</h1>
                 <p class="page-subtitle">Berikut ringkasan kegiatan Humas EEPROM hari ini, ${formatDate(new Date())}</p>
             </div>
             <div class="page-actions">
@@ -86,7 +103,7 @@ function getDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats) 
                 </div>
             </div>
             
-            <div class="stat-card" data-animate="counter">
+            <div class="stat-card" data-animate="counter" id="stat-total-tasks" style="cursor: pointer;" title="Lihat daftar task selesai">
                 <div class="stat-icon" style="background: rgba(16,185,129,0.15); color: #10B981">
                     <i data-lucide="check-square"></i>
                 </div>
@@ -188,19 +205,41 @@ function getDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats) 
                 </div>
             </div>
             
-            <!-- Activity Log -->
+            <!-- Transfer Requests -->
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title"><i data-lucide="activity"></i> Aktivitas Terbaru</h3>
+                    <h3 class="card-title"><i data-lucide="user-plus"></i> Request Pergantian Tugas</h3>
                 </div>
                 <div class="card-body">
-                    <div class="activity-list">
-                        ${MOCK_ACTIVITY_LOGS.map(log => getActivityItem(log)).join('')}
-                    </div>
+                    ${transferRequests.length === 0 
+                        ? `<div class="empty-state compact"><p>Tidak ada request pending</p></div>`
+                        : `<div class="activity-list">
+                            ${transferRequests.map(req => getTransferRequestItem(req)).join('')}
+                           </div>`
+                    }
+                </div>
+            </div>
+            
+            <!-- Activity Log -->
+            <div class="card dashboard-card-lg">
+                <div class="card-header">
+                    <h3 class="card-title"><i data-lucide="activity"></i> Aktivitas Terbaru</h3>
+                    <span class="badge badge-success" style="font-size:11px">Live</span>
+                </div>
+                <div class="card-body">
+                    ${activityLogs.length === 0
+                        ? `<div class="empty-state compact">
+                               <i data-lucide="clock"></i>
+                               <p>Belum ada aktivitas. Mulai tambahkan atau ubah task!</p>
+                           </div>`
+                        : `<div class="activity-list">
+                               ${activityLogs.map(log => getActivityItem(log)).join('')}
+                           </div>`
+                    }
                 </div>
             </div>
         </div>
-        
+
         <!-- Progress Chart -->
         <div class="card">
             <div class="card-header">
@@ -212,6 +251,221 @@ function getDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, stats) 
         </div>
     `;
 }
+
+function getStaffDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, greeting, user, transferRequests) {
+    const myTasks = tasks.filter(t => t.assigned_to === user.id);
+    const myTaskStats = getTaskStats(myTasks);
+    const teamTasks = tasks.filter(t => t.assigned_to !== user.id);
+    
+    // Kelompokkan tugas teman berdasarkan assignee
+    const teamByAssignee = {};
+    teamTasks.forEach(t => {
+        const key = t.assignee_name || 'Tidak Diassign';
+        if (!teamByAssignee[key]) teamByAssignee[key] = [];
+        teamByAssignee[key].push(t);
+    });
+
+    return `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">${greeting}, ${user?.nickname || user?.full_name?.split(' ')[0] || 'Tim'}! 👋</h1>
+                <p class="page-subtitle">Daftar tugas Anda — ${formatDate(new Date())}</p>
+            </div>
+            <div class="page-actions">
+                <button class="btn btn-outline" onclick="navigate('/tasks')">
+                    <i data-lucide="layout-dashboard"></i> Lihat Semua Task
+                </button>
+            </div>
+        </div>
+        
+        <!-- Stats Cards Ringkas -->
+        <div class="stats-grid">
+            <div class="stat-card" data-animate="counter">
+                <div class="stat-icon" style="background: rgba(108,99,255,0.15); color: #6C63FF">
+                    <i data-lucide="check-square"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" data-target="${myTaskStats.total}">${myTaskStats.total}</div>
+                    <div class="stat-label">Task Saya</div>
+                    <div class="stat-sub">
+                        <span class="badge badge-success">${myTaskStats.done} selesai</span>
+                    </div>
+                </div>
+            </div>
+            <div class="stat-card" data-animate="counter">
+                <div class="stat-icon" style="background: rgba(245,158,11,0.15); color: #F59E0B">
+                    <i data-lucide="loader"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" data-target="${myTaskStats.in_progress}">${myTaskStats.in_progress}</div>
+                    <div class="stat-label">Sedang Dikerjakan</div>
+                    <div class="stat-sub"><span class="badge badge-warning">On progress</span></div>
+                </div>
+            </div>
+            <div class="stat-card ${myTaskStats.overdue > 0 ? 'danger' : ''}" data-animate="counter">
+                <div class="stat-icon" style="background: rgba(239,68,68,0.15); color: #EF4444">
+                    <i data-lucide="alert-triangle"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" data-target="${myTaskStats.overdue}">${myTaskStats.overdue}</div>
+                    <div class="stat-label">Terlambat</div>
+                    <div class="stat-sub"><span class="badge badge-danger">${myTaskStats.overdue > 0 ? 'Segera selesaikan!' : 'Aman'}</span></div>
+                </div>
+            </div>
+            <div class="stat-card" data-animate="counter">
+                <div class="stat-icon" style="background: rgba(6,182,212,0.15); color: #06B6D4">
+                    <i data-lucide="users"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" data-target="${teamTasks.length}">${teamTasks.length}</div>
+                    <div class="stat-label">Task Tim</div>
+                    <div class="stat-sub"><span class="badge badge-primary">Satu Divisi</span></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- TUGAS SAYA (utama) -->
+        <div class="card" style="margin-bottom: 1.5rem">
+            <div class="card-header">
+                <h3 class="card-title"><i data-lucide="check-circle"></i> Tugas Saya</h3>
+                <span class="badge badge-primary">${myTasks.length} task</span>
+            </div>
+            <div class="card-body" style="padding: 0">
+                ${myTasks.length === 0
+                    ? `<div class="empty-state" style="padding:2rem">
+                           <i data-lucide="inbox"></i>
+                           <h3>Belum Ada Tugas</h3>
+                           <p>Anda belum memiliki tugas yang di-assign.</p>
+                       </div>`
+                    : myTasks.map(t => getMyTaskRow(t)).join('')
+                }
+            </div>
+        </div>
+        
+        <!-- TUGAS TIM (read-only, bisa ajukan alih tugas) -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i data-lucide="users"></i> Tugas Anggota Lain</h3>
+                <span class="text-xs text-muted">Bisa dilihat, ubah status hanya oleh pemilik tugas</span>
+            </div>
+            <div class="card-body" style="padding: 0">
+                ${teamTasks.length === 0
+                    ? `<div class="empty-state compact" style="padding:1.5rem">
+                           <p class="text-muted">Tidak ada tugas dari anggota lain.</p>
+                       </div>`
+                    : teamTasks.map(t => getTeamTaskRow(t, user)).join('')
+                }
+            </div>
+        </div>
+        
+        <!-- Transfer Requests (Hanya tampilkan jika ada request yang terkait user) -->
+        ${(() => {
+            const myRequests = transferRequests.filter(req => req.owner_id === user.id || req.requester_id === user.id);
+            if (myRequests.length === 0) return '';
+            
+            return `
+            <div class="card" style="margin-bottom: 1.5rem">
+                <div class="card-header">
+                    <h3 class="card-title"><i data-lucide="user-plus"></i> Request Pergantian Tugas Saya</h3>
+                </div>
+                <div class="card-body">
+                    <div class="activity-list">
+                        ${myRequests.map(req => getTransferRequestItem(req)).join('')}
+                    </div>
+                </div>
+            </div>
+            `;
+        })()}
+    `;
+}
+
+function getMyTaskRow(task) {
+    const status = TASK_STATUS[task.status] || TASK_STATUS.todo;
+    const color = getProgressColor(task.progress || 0);
+    const isOverdue = task.deadline && new Date(task.deadline) < new Date() && !['done', 'cancelled'].includes(task.status);
+    const priority = TASK_PRIORITY[task.priority] || TASK_PRIORITY.medium;
+    
+    const nextStatusMap = { todo: 'in_progress', in_progress: 'review', review: 'done', done: 'todo' };
+    const nextStatus = nextStatusMap[task.status] || 'in_progress';
+    const nextStatusConf = TASK_STATUS[nextStatus];
+    
+    return `
+        <div class="staff-task-row ${isOverdue ? 'overdue-row' : ''}" data-task-id="${task.id}">
+            <div class="staff-task-status-bar" style="background: ${status.color}"></div>
+            <div class="staff-task-main">
+                <div class="staff-task-info">
+                    <div class="staff-task-title">${task.title}</div>
+                    <div class="staff-task-meta">
+                        ${task.program_name ? `<span class="staff-task-tag"><i data-lucide="briefcase" style="width:11px;height:11px"></i>${task.program_name}</span>` : ''}
+                        ${task.deadline ? `<span class="staff-task-tag ${isOverdue ? 'text-danger' : ''}"><i data-lucide="clock" style="width:11px;height:11px"></i>${isOverdue ? 'Terlambat!' : formatDate(task.deadline, { day: 'numeric', month: 'short' })}</span>` : ''}
+                        <span class="staff-task-tag" style="color:${priority.color}"><i data-lucide="${priority.icon}" style="width:11px;height:11px"></i>${priority.label}</span>
+                    </div>
+                </div>
+                <div class="staff-task-progress-wrap">
+                    <div class="progress-bar sm" style="width:80px">
+                        <div class="progress-fill" style="width:${task.progress || 0}%;background:${color}"></div>
+                    </div>
+                    <span class="text-xs" style="color:${color};min-width:30px;text-align:right">${task.progress || 0}%</span>
+                </div>
+                <div class="staff-task-status-badge">
+                    <span class="badge" style="background:${status.color}20;color:${status.color}">
+                        <i data-lucide="${status.icon}" style="width:11px;height:11px"></i>
+                        ${status.label}
+                    </span>
+                </div>
+                <div class="staff-task-actions">
+                    <button class="btn btn-primary btn-sm" 
+                        data-action="status" 
+                        data-id="${task.id}" 
+                        data-status="${task.status}"
+                        title="Ubah status ke ${nextStatusConf?.label}">
+                        <i data-lucide="refresh-cw"></i>
+                        → ${nextStatusConf?.label || 'Next'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getTeamTaskRow(task, currentUser) {
+    const status = TASK_STATUS[task.status] || TASK_STATUS.todo;
+    const isOverdue = task.deadline && new Date(task.deadline) < new Date() && !['done', 'cancelled'].includes(task.status);
+    const initials = (task.assignee_name || '?').charAt(0).toUpperCase();
+    const avatarColors = ['#6C63FF', '#10B981', '#F59E0B', '#EC4899', '#06B6D4'];
+    const avatarColor = avatarColors[(task.assignee_name?.charCodeAt(0) || 0) % avatarColors.length];
+    
+    return `
+        <div class="staff-task-row team-task-row ${isOverdue ? 'overdue-row' : ''}" data-task-id="${task.id}">
+            <div class="staff-task-status-bar" style="background: ${status.color}; opacity: 0.4"></div>
+            <div class="staff-task-main">
+                <div class="team-task-avatar" style="background:${avatarColor}22;color:${avatarColor}">${initials}</div>
+                <div class="staff-task-info">
+                    <div class="staff-task-title" style="color:var(--text-muted)">${task.title}</div>
+                    <div class="staff-task-meta">
+                        <span class="staff-task-tag" style="color:${avatarColor}"><i data-lucide="user" style="width:11px;height:11px"></i>${task.assignee_name || 'Unassigned'}</span>
+                        ${task.program_name ? `<span class="staff-task-tag"><i data-lucide="briefcase" style="width:11px;height:11px"></i>${task.program_name}</span>` : ''}
+                    </div>
+                </div>
+                <div class="staff-task-status-badge">
+                    <span class="badge" style="background:${status.color}20;color:${status.color};opacity:0.8">
+                        ${status.label}
+                    </span>
+                </div>
+                <div class="staff-task-actions">
+                    <button class="btn btn-ghost btn-sm text-muted" 
+                        data-action="transfer_request" 
+                        data-id="${task.id}" 
+                        data-owner="${task.assigned_to}"
+                        title="Ajukan Alih Tugas">
+                        <i data-lucide="user-plus"></i> Ambil Alih
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 
 // ============================================================
 // ITEM TEMPLATES
@@ -273,33 +527,82 @@ function getDeadlineItem(task) {
 
 function getActivityItem(log) {
     const actionIcons = {
-        create: { icon: 'plus-circle', color: '#10B981' },
-        update: { icon: 'edit', color: '#6C63FF' },
-        delete: { icon: 'trash-2', color: '#EF4444' },
-        login: { icon: 'log-in', color: '#06B6D4' },
-        logout: { icon: 'log-out', color: '#94A3B8' },
-        upload: { icon: 'upload', color: '#F59E0B' },
-        download: { icon: 'download', color: '#8B5CF6' },
+        create:        { icon: 'plus-circle',    color: '#10B981' },
+        update:        { icon: 'edit-3',          color: '#6C63FF' },
+        delete:        { icon: 'trash-2',         color: '#EF4444' },
+        status_change: { icon: 'refresh-cw',      color: '#F59E0B' },
+        login:         { icon: 'log-in',          color: '#06B6D4' },
+        logout:        { icon: 'log-out',         color: '#94A3B8' },
+        upload:        { icon: 'upload',          color: '#F59E0B' },
+        download:      { icon: 'download',        color: '#8B5CF6' },
+        transfer:      { icon: 'user-plus',       color: '#EC4899' },
     };
     
     const config = actionIcons[log.action] || actionIcons.update;
+    
     const actionLabel = {
-        create: 'menambahkan', update: 'mengubah', delete: 'menghapus',
-        login: 'masuk ke sistem', logout: 'keluar dari sistem',
-        upload: 'mengunggah', download: 'mengunduh',
+        create:        'menambahkan',
+        update:        'mengubah',
+        delete:        'menghapus',
+        status_change: 'mengubah status',
+        login:         'masuk ke sistem',
+        logout:        'keluar dari sistem',
+        upload:        'mengunggah',
+        download:      'mengunduh',
+        transfer:      'mengajukan alih tugas',
     };
+    
+    // Tambahan info untuk status_change
+    let extraInfo = '';
+    if (log.action === 'status_change' && log.meta?.status) {
+        const statusConf = TASK_STATUS[log.meta.status];
+        extraInfo = statusConf 
+            ? ` → <span style="color:${statusConf.color}; font-weight:600">${statusConf.label}</span>`
+            : '';
+    }
+    
+    const initials = (log.user_name || log.user_full_name || 'U').charAt(0).toUpperCase();
+    const avatarColors = ['#6C63FF', '#10B981', '#F59E0B', '#EC4899', '#06B6D4', '#EF4444'];
+    const avatarColor = avatarColors[(log.user_name?.charCodeAt(0) || 0) % avatarColors.length];
     
     return `
         <div class="activity-item">
-            <div class="activity-icon" style="background: ${config.color}20; color: ${config.color}">
-                <i data-lucide="${config.icon}"></i>
+            <div class="activity-icon" style="background: ${avatarColor}22; color: ${avatarColor}; font-weight: 700; font-size: 13px;">
+                ${initials}
             </div>
             <div class="activity-content">
                 <div class="activity-text">
-                    <strong>${log.user_name}</strong> ${actionLabel[log.action] || log.action} 
-                    <span>${log.resource_name || ''}</span>
+                    <strong>${log.user_name || log.user_full_name || 'User'}</strong>
+                    ${actionLabel[log.action] || log.action}
+                    <span style="color: var(--primary-color)">${log.resource_name || ''}</span>${extraInfo}
                 </div>
                 <div class="activity-time text-xs text-muted">${formatRelativeTime(log.created_at)}</div>
+            </div>
+            <div class="activity-action-icon" style="color: ${config.color}; opacity: 0.8">
+                <i data-lucide="${config.icon}" style="width:14px;height:14px"></i>
+            </div>
+        </div>
+    `;
+}
+
+function getTransferRequestItem(req) {
+    return `
+        <div class="activity-item">
+            <div class="activity-icon" style="background: #F59E0B20; color: #F59E0B">
+                <i data-lucide="user-plus"></i>
+            </div>
+            <div class="activity-content">
+                <div class="activity-text" style="font-size: 13px;">
+                    <strong>${req.requester?.full_name || req.requester_name}</strong> ingin mengambil alih task 
+                    <strong>${req.tasks?.title || 'Task'}</strong>
+                </div>
+                <div class="activity-time text-xs text-muted" style="margin-bottom: 8px;">
+                    Alasan: "${req.reason}"
+                </div>
+                <div class="flex gap-2">
+                    <button class="btn btn-primary btn-xs" onclick="handleTransferApproval('${req.id}', '${req.task_id}', '${req.requester_id}', 'approved')">Approve</button>
+                    <button class="btn btn-outline btn-xs" onclick="handleTransferApproval('${req.id}', '${req.task_id}', '${req.requester_id}', 'rejected')">Reject</button>
+                </div>
             </div>
         </div>
     `;
@@ -493,3 +796,390 @@ async function fetchStats() {
     const { data } = await getSupabase().rpc('get_dashboard_stats');
     return data || {};
 }
+
+// ============================================================
+// GLOBAL HANDLERS
+// ============================================================
+
+/**
+ * Modal upload bukti foto untuk penyelesaian task
+ */
+function showProofModal(task, onConfirm) {
+    // Hapus modal lama jika ada
+    document.getElementById('proof-modal')?.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'proof-modal';
+    modal.className = 'modal-overlay proof-modal-overlay';
+    modal.innerHTML = `
+        <div class="modal proof-modal">
+            <div class="modal-header">
+                <h3 class="modal-title"><i data-lucide="camera"></i> Upload Bukti Penyelesaian</h3>
+                <button class="btn-icon modal-close" id="proof-modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted" style="margin-bottom:1rem">
+                    Untuk menandai <strong>${task.title}</strong> sebagai <strong style="color:#10B981">Selesai</strong>, 
+                    Anda wajib mengunggah foto/screenshot sebagai bukti penyelesaian.
+                </p>
+                <div class="proof-upload-area" id="proof-upload-area">
+                    <input type="file" id="proof-file-input" accept="image/*" style="display:none">
+                    <div class="proof-upload-placeholder" id="proof-placeholder">
+                        <i data-lucide="upload-cloud"></i>
+                        <p>Klik atau drag & drop foto di sini</p>
+                        <span class="text-xs text-muted">PNG, JPG, JPEG hingga 2MB</span>
+                    </div>
+                    <div class="proof-preview" id="proof-preview" style="display:none">
+                        <img id="proof-preview-img" src="" alt="Preview">
+                        <button class="proof-remove-btn" id="proof-remove">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-xs text-muted mt-2" style="margin-top:0.75rem">
+                    ⚠️ Setelah status diubah ke Selesai dengan bukti foto, status tidak bisa dikembalikan.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="proof-cancel">Batal</button>
+                <button class="btn btn-success" id="proof-confirm" disabled>
+                    <i data-lucide="check-circle"></i> Tandai Selesai
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    if (window.lucide) lucide.createIcons({ nodes: [modal] });
+    
+    // Animasi masuk
+    requestAnimationFrame(() => modal.classList.add('modal-open'));
+    
+    let selectedFile = null;
+    
+    const fileInput = modal.querySelector('#proof-file-input');
+    const uploadArea = modal.querySelector('#proof-upload-area');
+    const placeholder = modal.querySelector('#proof-placeholder');
+    const preview = modal.querySelector('#proof-preview');
+    const previewImg = modal.querySelector('#proof-preview-img');
+    const confirmBtn = modal.querySelector('#proof-confirm');
+    
+    // Klik area upload
+    uploadArea.addEventListener('click', (e) => {
+        if (!e.target.closest('#proof-remove')) fileInput.click();
+    });
+    
+    // Drag & drop
+    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+    uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) setFile(file);
+    });
+    
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files[0]) setFile(fileInput.files[0]);
+    });
+    
+    function setFile(file) {
+        if (!file.type.startsWith('image/')) {
+            toast.warning('File harus berupa gambar (JPG/PNG/WEBP)');
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            toast.warning('Ukuran file maksimal 2MB');
+            return;
+        }
+        selectedFile = file;
+        const url = URL.createObjectURL(file);
+        previewImg.src = url;
+        placeholder.style.display = 'none';
+        preview.style.display = 'block';
+        confirmBtn.disabled = false;
+    }
+    
+    // Hapus file
+    modal.querySelector('#proof-remove').addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedFile = null;
+        fileInput.value = '';
+        previewImg.src = '';
+        placeholder.style.display = 'flex';
+        preview.style.display = 'none';
+        confirmBtn.disabled = true;
+    });
+    
+    // Tutup modal
+    function closeModal() {
+        modal.classList.remove('modal-open');
+        setTimeout(() => modal.remove(), 300);
+    }
+    
+    modal.querySelector('#proof-modal-close').addEventListener('click', closeModal);
+    modal.querySelector('#proof-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    
+    // Confirm
+    confirmBtn.addEventListener('click', async () => {
+        if (!selectedFile) return;
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<i data-lucide="loader"></i> Menyimpan...';
+        if (window.lucide) lucide.createIcons({ nodes: [confirmBtn] });
+        closeModal();
+        await onConfirm(selectedFile);
+    });
+}
+
+/**
+ * Generic modal helper untuk dashboard
+ */
+function showModal({ title, content, size = 'md', confirmText = 'OK', onConfirm } = {}) {
+    document.getElementById('dashboard-modal')?.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'dashboard-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal modal-${size}">
+            <div class="modal-header">
+                <h3 class="modal-title">${title}</h3>
+                <button class="btn-icon modal-close" id="dash-modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">${content}</div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="dash-modal-cancel">Batal</button>
+                <button class="btn btn-primary" id="dash-modal-confirm">${confirmText}</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    if (window.lucide) lucide.createIcons({ nodes: [modal] });
+    requestAnimationFrame(() => modal.classList.add('modal-open'));
+    
+    function closeModal() {
+        modal.classList.remove('modal-open');
+        setTimeout(() => modal.remove(), 300);
+    }
+    
+    modal.querySelector('#dash-modal-close').addEventListener('click', closeModal);
+    modal.querySelector('#dash-modal-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    
+    modal.querySelector('#dash-modal-confirm').addEventListener('click', async () => {
+        const result = await onConfirm?.();
+        if (result !== false) closeModal();
+    });
+}
+
+/**
+ * Setup event listeners untuk dashboard interaktif (terutama role anggota)
+ */
+function initDashboardEvents(container, tasks) {
+    // Delegated event listener untuk seluruh dashboard
+    container.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        
+        const action = btn.dataset.action;
+        const taskId = btn.dataset.id;
+        const task = tasks.find(t => t.id === taskId);
+        if (!task && action !== 'transfer_request') return;
+        
+        const user = store.get('user');
+        
+        // ── Ubah Status Task (hanya pemilik) ──
+        if (action === 'status') {
+            // Cek kepemilikan dengan toleran (UUID bisa berbeda format)
+            const isOwner = task.assigned_to === user?.id 
+                || task.assignee_email === user?.email
+                || task.assigned_to_email === user?.email;
+            const isAdmin = user?.role === 'super_admin' || user?.role === 'ketua_humas';
+            
+            if (!isOwner && !isAdmin) {
+                const { toast } = await import('../utils.js');
+                toast.warning('Hanya pemilik task yang dapat mengubah status.');
+                return;
+            }
+            
+            // Task Done tidak bisa diubah lagi
+            if (task.status === 'done') {
+                const { toast } = await import('../utils.js');
+                toast.warning('Task sudah selesai dan tidak dapat diubah kembali.');
+                return;
+            }
+            
+            const statuses = ['todo', 'in_progress', 'review', 'done'];
+            const currentIdx = statuses.indexOf(task.status);
+            const nextStatus = statuses[(currentIdx + 1) % statuses.length];
+            
+            // ── Jika next status adalah DONE → wajib upload bukti foto ──
+            if (nextStatus === 'done') {
+                const { toast } = await import('../utils.js');
+                const { markTaskDoneWithProof } = await import('../api/tasks.js');
+                
+                showProofModal(task, async (file) => {
+                    if (!file) {
+                        toast.warning('Bukti foto wajib diunggah untuk menyelesaikan task.');
+                        return;
+                    }
+                    btn.disabled = true;
+                    const result = await markTaskDoneWithProof(taskId, file);
+                    if (result.error) {
+                        toast.error('Gagal menandai task sebagai selesai');
+                    } else {
+                        toast.success('Task berhasil diselesaikan! 🎉');
+                        const appContainer = document.getElementById('app-content');
+                        if (appContainer) render(appContainer);
+                    }
+                });
+                return;
+            }
+            
+            const { updateTaskStatus } = await import('../api/tasks.js');
+            const { toast } = await import('../utils.js');
+            const { TASK_STATUS: TS } = await import('../config.js');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader"></i>';
+            if (window.lucide) lucide.createIcons({ nodes: [btn] });
+            
+            const { error } = await updateTaskStatus(taskId, nextStatus);
+            if (error) {
+                toast.error('Gagal mengubah status');
+                btn.disabled = false;
+            } else {
+                toast.success(`Status diubah ke ${TS[nextStatus]?.label || nextStatus}`);
+                const appContainer = document.getElementById('app-content');
+                if (appContainer) render(appContainer);
+            }
+        }
+        
+        // ── Ajukan Alih Tugas ──
+        if (action === 'transfer_request') {
+            const { submitTransferRequest } = await import('../api/tasks.js');
+            const { toast } = await import('../utils.js');
+            const ownerId = btn.dataset.owner;
+            const targetTask = tasks.find(t => t.id === taskId);
+            
+            const formHTML = `
+                <div class="form-group">
+                    <p class="text-muted" style="margin-bottom:0.75rem">
+                        Anda akan mengajukan alih tugas untuk: 
+                        <strong>${targetTask?.title || 'Task'}</strong><br>
+                        Pemilik saat ini: <strong>${targetTask?.assignee_name || 'Tidak diketahui'}</strong>
+                    </p>
+                    <label>Alasan Pengambilalihan *</label>
+                    <textarea id="transfer-reason" class="form-input" rows="3" 
+                        placeholder="Jelaskan alasan mengapa Anda ingin mengambil alih tugas ini..."></textarea>
+                    <p class="text-xs text-muted mt-2">Request ini akan dikirimkan ke pemilik tugas untuk disetujui.</p>
+                </div>
+            `;
+            
+            showModal({
+                title: 'Ajukan Alih Tugas',
+                content: formHTML,
+                confirmText: 'Kirim Request',
+                onConfirm: async () => {
+                    const reason = document.getElementById('transfer-reason')?.value?.trim();
+                    if (!reason) {
+                        const { toast: t } = await import('../utils.js');
+                        t.warning('Alasan tidak boleh kosong');
+                        return false; // Jangan tutup modal
+                    }
+                    const { error } = await submitTransferRequest(taskId, ownerId, reason);
+                    if (error) {
+                        const { toast: t } = await import('../utils.js');
+                        t.error('Gagal mengajukan alih tugas: ' + (error.message || error));
+                    } else {
+                        const { toast: t } = await import('../utils.js');
+                        t.success('Request berhasil dikirim! Menunggu persetujuan pemilik tugas.');
+                        
+                        // Render ulang dashboard agar request baru muncul di widget
+                        const appContainer = document.getElementById('app-content');
+                        if (appContainer) render(appContainer);
+                    }
+                }
+            });
+        }
+    });
+    
+    // ── Lihat Daftar Task Selesai (Klik Stat Card Total Task) ──
+    const statTotalTasks = document.getElementById('stat-total-tasks');
+    if (statTotalTasks) {
+        statTotalTasks.addEventListener('click', () => {
+            const user = store.get('user');
+            
+            const completedTasks = tasks.filter(t => t.status === 'done');
+            let contentHTML = '';
+            
+            if (completedTasks.length === 0) {
+                contentHTML = `<div class="empty-state compact"><p>Belum ada task yang diselesaikan.</p></div>`;
+            } else {
+                contentHTML = `
+                    <div class="task-list" style="display:flex; flex-direction:column; gap:12px; max-height:400px; overflow-y:auto; padding-right:8px;">
+                        ${completedTasks.map(task => `
+                            <div class="card" style="padding:12px; border:1px solid var(--border-light); border-radius:var(--radius-md);">
+                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px">
+                                    <div style="flex:1">
+                                        <h4 style="margin:0; font-size:14px; font-weight:600; color:var(--text)">${task.title}</h4>
+                                        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
+                                            <i data-lucide="user" style="width:12px; height:12px; display:inline-block; vertical-align:-2px;"></i> ${task.assignee_name || 'Tidak diketahui'} &bull; 
+                                            <i data-lucide="folder" style="width:12px; height:12px; display:inline-block; vertical-align:-2px;"></i> ${task.program_name || '-'}
+                                        </div>
+                                    </div>
+                                    ${task.proof_url ? `
+                                        <button class="btn btn-sm btn-outline" style="padding: 6px 12px; font-size:12px; flex-shrink:0" onclick="window.open('${task.proof_url}', '_blank')">
+                                            <i data-lucide="image" style="width:14px; height:14px"></i> Bukti
+                                        </button>
+                                    ` : `
+                                        <span class="badge badge-muted" style="font-size:11px">Tanpa Foto</span>
+                                    `}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            showModal({
+                title: '<span style="display:flex;align-items:center;gap:8px"><i data-lucide="check-square" style="color:#10B981"></i> Daftar Task Selesai</span>',
+                content: contentHTML,
+                confirmText: 'Tutup',
+                onConfirm: () => true
+            });
+            
+            // Sembunyikan tombol "Batal" karena ini hanya modal informasi
+            const modal = document.getElementById('dashboard-modal');
+            if (modal) {
+                const cancelBtn = modal.querySelector('#dash-modal-cancel');
+                if (cancelBtn) cancelBtn.style.display = 'none';
+            }
+        });
+    }
+}
+
+window.handleTransferApproval = async function(requestId, taskId, newOwnerId, status) {
+    const { updateTransferRequestStatus } = await import('../api/tasks.js');
+    const { toast } = await import('../utils.js');
+    
+    const { error } = await updateTransferRequestStatus(requestId, taskId, newOwnerId, status);
+    
+    if (error) {
+        toast.error('Gagal memproses request');
+    } else {
+        toast.success(`Request berhasil di-${status}`);
+        
+        // Refresh dashboard (assuming we are on dashboard page)
+        const container = document.getElementById('app-content');
+        if (container) {
+            render(container);
+        }
+    }
+};

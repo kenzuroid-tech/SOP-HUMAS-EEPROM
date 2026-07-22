@@ -49,9 +49,9 @@ const REGISTRATION_OPEN = true;
 const CLOSED_MESSAGE = 'Pendaftaran sedang ditutup. Pantau info resmi EEPROM untuk jadwal selanjutnya.';
 
 const RATE = {
-    cooldownMs : 60_000,  // 60 detik antar percobaan submit
-    maxPerHour : 3,       // Maks 3 submit per jam per browser
-    storageKey : 'eeprom_reg_v1',
+    cooldownMs: 60_000,  // 60 detik antar percobaan submit
+    maxPerHour: 3,       // Maks 3 submit per jam per browser
+    storageKey: 'eeprom_reg_v1',
 };
 
 // ============================================================
@@ -144,15 +144,15 @@ function san(val, maxLen = 200) {
 const RULES = {
     nama: (v) =>
         !v ? 'Nama lengkap wajib diisi'
-        : v.length < 3 ? 'Nama terlalu pendek (minimal 3 karakter)'
-        : '',
+            : v.length < 3 ? 'Nama terlalu pendek (minimal 3 karakter)'
+                : '',
 
     panggilan: (v) => (!v ? 'Nama panggilan wajib diisi' : ''),
 
     nim: (v) =>
         !v ? 'NIM wajib diisi'
-        : !/^\d{10,20}$/.test(v) ? 'NIM harus berupa angka (10–20 digit)'
-        : '',
+            : !/^\d{10,20}$/.test(v) ? 'NIM harus berupa angka (10–20 digit)'
+                : '',
 
     angkatan: (v) => (!v ? 'Angkatan wajib dipilih' : ''),
 
@@ -213,7 +213,7 @@ function clearError(field) {
 // ============================================================
 
 function setSubmitting(loading) {
-    const btn  = $('submit-btn');
+    const btn = $('submit-btn');
     const text = $('submit-text');
     const spin = $('submit-spin');
     if (!btn) return;
@@ -239,14 +239,14 @@ function showSuccess({ nama, nim, angkatan }) {
     // Isi data konfirmasi
     const set = (id, val) => { const el = $(id); if (el) el.textContent = val; };
     const refCode = `#EPR-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-    set('suc-nama',     nama);
-    set('suc-nim',      nim);
+    set('suc-nama', nama);
+    set('suc-nim', nim);
     set('suc-angkatan', `Angkatan ${angkatan}`);
-    set('suc-ref',      refCode);
+    set('suc-ref', refCode);
     set('suc-ref-repeat', refCode);  // Sync repeat display
 
     // Ganti tampilan
-    $('reg-wrap').style.display    = 'none';
+    $('reg-wrap').style.display = 'none';
     $('reg-success').style.display = 'flex';
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -264,7 +264,7 @@ async function handleSubmit(e) {
     if (hp && hp.value !== '') {
         // Fake success agar bot tidak tahu deteksi berhasil
         console.warn('[Security] Honeypot triggered — bot submission rejected');
-        $('reg-wrap').style.display    = 'none';
+        $('reg-wrap').style.display = 'none';
         $('reg-success').style.display = 'flex';
         return;
     }
@@ -278,26 +278,26 @@ async function handleSubmit(e) {
 
     // Kumpulkan data mentah dari form
     const raw = {
-        nama      : $('f-nama')?.value      ?? '',
-        panggilan : $('f-panggilan')?.value ?? '',
-        nim       : $('f-nim')?.value       ?? '',
-        angkatan  : $('f-angkatan')?.value  ?? '',
-        prodi     : $('f-prodi')?.value     ?? '',
-        wa        : $('f-wa')?.value        ?? '',
-        email     : $('f-email')?.value     ?? '',
-        motivasi  : $('f-motivasi')?.value  ?? '',
+        nama: $('f-nama')?.value ?? '',
+        panggilan: $('f-panggilan')?.value ?? '',
+        nim: $('f-nim')?.value ?? '',
+        angkatan: $('f-angkatan')?.value ?? '',
+        prodi: $('f-prodi')?.value ?? '',
+        wa: $('f-wa')?.value ?? '',
+        email: $('f-email')?.value ?? '',
+        motivasi: $('f-motivasi')?.value ?? '',
     };
 
     // SECURITY 3: Sanitisasi — strip HTML, enforce panjang max
     const data = {
-        nama      : san(raw.nama,      100),
-        panggilan : san(raw.panggilan, 50),
-        nim       : san(raw.nim,       20).replace(/\D/g, ''), // digit only
-        angkatan  : san(raw.angkatan,  10),
-        prodi     : san(raw.prodi,     100),
-        wa        : san(raw.wa,        20),
-        email     : san(raw.email,     100).toLowerCase(),
-        motivasi  : san(raw.motivasi,  500),
+        nama: san(raw.nama, 100),
+        panggilan: san(raw.panggilan, 50),
+        nim: san(raw.nim, 20).replace(/\D/g, ''), // digit only
+        angkatan: san(raw.angkatan, 10),
+        prodi: san(raw.prodi, 100),
+        wa: san(raw.wa, 20),
+        email: san(raw.email, 100).toLowerCase(),
+        motivasi: san(raw.motivasi, 500),
     };
 
     // SECURITY 4: Validasi format
@@ -320,15 +320,15 @@ async function handleSubmit(e) {
         // type SELALU 'pendaftar' — tidak boleh dari input user
         // Jika NIM duplikat → DB unique constraint error (code 23505)
         const { error } = await db.from('participants').insert({
-            type      : 'pendaftar',    // HARDCODED — tidak dari user input
-            full_name : data.nama,
-            nickname  : data.panggilan,
-            nim       : data.nim,
-            angkatan  : data.angkatan,
-            prodi     : data.prodi,
-            phone     : data.wa,
-            email     : data.email  || null,
-            notes     : data.motivasi || null,
+            type: 'pendaftar',    // HARDCODED — tidak dari user input
+            full_name: data.nama,
+            nickname: data.panggilan,
+            nim: data.nim,
+            angkatan: data.angkatan,
+            prodi: data.prodi,
+            phone: data.wa,
+            email: data.email || null,
+            notes: data.motivasi || null,
         });
 
         if (error) {
@@ -360,14 +360,14 @@ async function handleSubmit(e) {
 
 function bindInputEvents() {
     const fieldIds = {
-        'f-nama'      : 'nama',
-        'f-panggilan' : 'panggilan',
-        'f-nim'       : 'nim',
-        'f-angkatan'  : 'angkatan',
-        'f-prodi'     : 'prodi',
-        'f-wa'        : 'wa',
-        'f-email'     : 'email',
-        'f-motivasi'  : 'motivasi',
+        'f-nama': 'nama',
+        'f-panggilan': 'panggilan',
+        'f-nim': 'nim',
+        'f-angkatan': 'angkatan',
+        'f-prodi': 'prodi',
+        'f-wa': 'wa',
+        'f-email': 'email',
+        'f-motivasi': 'motivasi',
     };
 
     for (const [elId, field] of Object.entries(fieldIds)) {
@@ -399,7 +399,7 @@ function populateAngkatan() {
     if (!select) return;
     const currentYear = new Date().getFullYear();
     // Dari tahun ini + 1 ke belakang sampai 2018
-    for (let y = currentYear + 1; y >= 2018; y--) {
+    for (let y = currentYear + 1; y >= 2024; y--) {
         const opt = document.createElement('option');
         opt.value = String(y);
         opt.textContent = `Angkatan ${y}`;
@@ -419,17 +419,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const msgEl = $('closed-msg');
         if (msgEl) msgEl.textContent = CLOSED_MESSAGE;
         $('page-loading').style.display = 'none';
-        $('reg-closed').style.display   = 'flex';
-        $('reg-wrap').style.display     = 'none';
-        $('reg-success').style.display  = 'none';
+        $('reg-closed').style.display = 'flex';
+        $('reg-wrap').style.display = 'none';
+        $('reg-success').style.display = 'none';
         return;
     }
 
     // Tampilkan form
     $('page-loading').style.display = 'none';
-    $('reg-closed').style.display   = 'none';
-    $('reg-wrap').style.display     = '';
-    $('reg-success').style.display  = 'none';
+    $('reg-closed').style.display = 'none';
+    $('reg-wrap').style.display = '';
+    $('reg-success').style.display = 'none';
 
     $('reg-form')?.addEventListener('submit', handleSubmit);
     bindInputEvents();

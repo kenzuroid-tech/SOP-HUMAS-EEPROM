@@ -12,6 +12,87 @@ let db = null;
 function getDB() { return db || (db = getSupabase()); }
 
 // ============================================================
+// ACTIVITY LOG
+// ============================================================
+
+/**
+ * Catat aktivitas ke store (demo) atau Supabase (real)
+ * @param {string} action - 'create'|'update'|'delete'|'status_change'|'upload'|'transfer'
+ * @param {string} resourceType - 'task'|'program'|'document'
+ * @param {string} resourceName - Nama resource
+ * @param {Object} [meta] - Data tambahan
+ */
+export async function logActivity(action, resourceType, resourceName, meta = {}) {
+    const user = store.get('user');
+    if (!user) return;
+
+    const log = {
+        id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        user_id: user.id,
+        user_name: user.nickname || user.full_name?.split(' ')[0] || 'User',
+        user_full_name: user.full_name,
+        action,
+        resource_type: resourceType,
+        resource_name: resourceName,
+        meta,
+        created_at: new Date().toISOString(),
+    };
+
+    if (APP_CONFIG.demoMode) {
+        // Simpan ke store (prepend supaya yang terbaru di atas)
+        const existing = store.get('activityLogs') || [];
+        // Batasi 50 log terakhir
+        store.set({ activityLogs: [log, ...existing].slice(0, 50) });
+        return;
+    }
+
+    // Real mode: insert ke Supabase
+    try {
+        await getDB()
+            .from('activity_logs')
+            .insert({
+                user_id: user.id,
+                action,
+                resource_type: resourceType,
+                resource_name: resourceName,
+                meta,
+            });
+    } catch (err) {
+        console.warn('logActivity error:', err);
+    }
+}
+
+/**
+ * Ambil daftar aktivitas terbaru
+ * @param {number} limit
+ */
+export async function fetchActivityLogs(limit = 15) {
+    if (APP_CONFIG.demoMode) {
+        await delay(200);
+        const logs = store.get('activityLogs') || [];
+        return { data: logs.slice(0, limit), error: null };
+    }
+
+    const { data, error } = await getDB()
+        .from('activity_logs')
+        .select('*, profiles(full_name, nickname, avatar_url)')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+    if (!error && data) {
+        // Normalisasi: ambil nama dari relasi profiles
+        const normalized = data.map(log => ({
+            ...log,
+            user_name: log.profiles?.nickname || log.profiles?.full_name?.split(' ')[0] || 'User',
+            user_full_name: log.profiles?.full_name || 'User',
+        }));
+        return { data: normalized, error: null };
+    }
+
+    return { data: data || [], error };
+}
+
+// ============================================================
 // FETCH
 // ============================================================
 
@@ -89,6 +170,7 @@ export async function createTask(taskData) {
         
         const tasks = [...store.get('tasks'), newTask];
         store.set({ tasks });
+        await logActivity('create', 'task', newTask.title);
         return { data: newTask, error: null };
     }
     
@@ -99,7 +181,10 @@ export async function createTask(taskData) {
         .select()
         .single();
     
-    if (!error) await fetchTasks();
+    if (!error) {
+        await fetchTasks();
+        await logActivity('create', 'task', data.title);
+    }
     return { data, error };
 }
 
@@ -110,38 +195,65 @@ export async function updateTask(id, updates) {
             t.id === id ? { ...t, ...updates } : t
         );
         store.set({ tasks });
-        return { data: tasks.find(t => t.id === id), error: null };
+        const updated = tasks.find(t => t.id === id);
+        // Hanya log jika bukan update internal (transfer/assignment)
+        if (!updates._silent) {
+            await logActivity('update', 'task', updated?.title || id);
+        }
+        return { data: updated, error: null };
     }
     
+    const { _silent, ...cleanUpdates } = updates;
     const { data, error } = await getDB()
         .from('tasks')
-        .update(updates)
+        .update(cleanUpdates)
         .eq('id', id)
         .select()
         .single();
     
-    if (!error) await fetchTasks();
+    if (!error) {
+        await fetchTasks();
+        if (!_silent) {
+            await logActivity('update', 'task', data?.title || id);
+        }
+    }
     return { data, error };
 }
 
 export async function deleteTask(id) {
     if (APP_CONFIG.demoMode) {
         await delay(400);
-        const tasks = store.get('tasks').filter(t => t.id !== id);
+        const allTasks = store.get('tasks');
+        const target = allTasks.find(t => t.id === id);
+        const tasks = allTasks.filter(t => t.id !== id);
         store.set({ tasks });
+        await logActivity('delete', 'task', target?.title || id);
         return { error: null };
     }
     
+    // Ambil judul dulu sebelum hapus
+    const { data: target } = await getDB().from('tasks').select('title').eq('id', id).single();
     const { error } = await getDB().from('tasks').delete().eq('id', id);
-    if (!error) await fetchTasks();
+    if (!error) {
+        await fetchTasks();
+        await logActivity('delete', 'task', target?.title || id);
+    }
     return { error };
 }
 
 export async function updateTaskStatus(id, status) {
     const progress = status === 'done' ? 100 : status === 'todo' ? 0 : undefined;
-    const updates = { status };
+    const updates = { status, _silent: true }; // skip generic update log
     if (progress !== undefined) updates.progress = progress;
-    return updateTask(id, updates);
+    
+    const result = await updateTask(id, updates);
+    
+    // Log status change secara spesifik
+    if (!result.error) {
+        const task = store.get('tasks').find(t => t.id === id);
+        await logActivity('status_change', 'task', task?.title || id, { status });
+    }
+    return result;
 }
 
 export async function updateTaskProgress(id, progress) {
@@ -196,3 +308,261 @@ function computeStats(tasks) {
 }
 
 const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ============================================================
+// TRANSFER REQUESTS
+// ============================================================
+
+export async function submitTransferRequest(taskId, ownerId, reason) {
+    const user = store.get('user');
+    if (!user) return { data: null, error: new Error('Tidak terautentikasi') };
+    
+    if (APP_CONFIG.demoMode) {
+        await delay(600);
+        let requests = store.get('transfer_requests') || [];
+        const taskTitle = store.get('tasks').find(t => t.id === taskId)?.title || 'Task';
+        
+        const newReq = {
+            id: `req-${Date.now()}`,
+            task_id: taskId,
+            requester_id: user.id,
+            requester_name: user.full_name,
+            owner_id: ownerId,
+            reason,
+            status: 'pending',
+            tasks: { title: taskTitle },
+            requester: { full_name: user.full_name, avatar_url: user.avatar_url },
+            created_at: new Date().toISOString()
+        };
+        requests = [newReq, ...requests];
+        store.set({ transfer_requests: requests });
+        
+        // Buat notifikasi
+        const notifs = store.get('notifications') || [];
+        const newNotif = {
+            id: `notif-${Date.now()}`,
+            type: 'warning',
+            title: 'Permintaan Pergantian Tugas',
+            message: `${user.full_name} mengajukan pergantian tugas untuk "${taskTitle}".`,
+            created_at: new Date().toISOString(),
+            is_read: false
+        };
+        store.set({ 
+            notifications: [newNotif, ...notifs],
+            unreadNotifications: (store.get('unreadNotifications') || 0) + 1
+        });
+        
+        return { data: newReq, error: null };
+    }
+    
+    try {
+        const { data, error } = await getDB()
+            .from('task_transfer_requests')
+            .insert({
+                task_id: taskId,
+                requester_id: user.id,
+                owner_id: ownerId,
+                reason,
+                status: 'pending'
+            })
+            .select()
+            .single();
+        
+        if (error) {
+            console.error('[submitTransferRequest] Supabase error:', error);
+            // Fallback: simpan di store lokal jika tabel belum ada
+            let requests = store.get('transfer_requests') || [];
+            const taskTitle = store.get('tasks').find(t => t.id === taskId)?.title || 'Task';
+            const fallbackReq = {
+                id: `req-${Date.now()}`,
+                task_id: taskId,
+                requester_id: user.id,
+                requester_name: user.full_name,
+                owner_id: ownerId,
+                reason,
+                status: 'pending',
+                tasks: { title: taskTitle },
+                requester: { full_name: user.full_name, avatar_url: user.avatar_url },
+                created_at: new Date().toISOString(),
+                _local: true
+            };
+            store.set({ transfer_requests: [fallbackReq, ...requests] });
+            
+            // Buat notifikasi lokal
+            const notifs = store.get('notifications') || [];
+            const newNotif = {
+                id: `notif-${Date.now()}`,
+                type: 'warning',
+                title: 'Permintaan Pergantian Tugas',
+                message: `${user.full_name} mengajukan pergantian tugas untuk "${taskTitle}".`,
+                user_id: ownerId, // Penting agar notif spesifik untuk owner
+                created_at: new Date().toISOString(),
+                is_read: false
+            };
+            store.set({ 
+                notifications: [newNotif, ...notifs],
+                unreadNotifications: (store.get('unreadNotifications') || 0) + 1
+            });
+            
+            return { data: fallbackReq, error: null }; // Return sukses dengan fallback
+        }
+        
+        // Buat notifikasi di database Supabase untuk owner
+        try {
+            const taskTitle = store.get('tasks').find(t => t.id === taskId)?.title || 'Task';
+            await getDB().from('notifications').insert({
+                user_id: ownerId,
+                type: 'warning',
+                title: 'Permintaan Pergantian Tugas',
+                message: `${user.full_name} mengajukan pergantian tugas untuk "${taskTitle}".`,
+                resource_type: 'task',
+                resource_id: taskId,
+                action_url: '#/dashboard',
+                is_read: false
+            });
+        } catch (notifErr) {
+            console.error('[submitTransferRequest] Failed to insert notification:', notifErr);
+        }
+        
+        return { data, error: null };
+    } catch (err) {
+        console.error('[submitTransferRequest] Exception:', err);
+        return { data: null, error: err };
+    }
+}
+
+export async function fetchTransferRequests() {
+    if (APP_CONFIG.demoMode) {
+        await delay(400);
+        const requests = store.get('transfer_requests') || [];
+        return { data: requests, error: null };
+    }
+    
+    try {
+        const { data, error } = await getDB()
+            .from('task_transfer_requests')
+            .select('*, tasks(title), requester:profiles!requester_id(full_name, avatar_url), owner:profiles!owner_id(full_name)')
+            .eq('status', 'pending');
+        
+        // Merge dengan request lokal (fallback) jika ada
+        const localRequests = (store.get('transfer_requests') || []).filter(r => r._local);
+        const merged = [...(data || []), ...localRequests];
+        
+        return { data: merged, error };
+    } catch (err) {
+        const localRequests = store.get('transfer_requests') || [];
+        return { data: localRequests, error: null };
+    }
+}
+
+export async function updateTransferRequestStatus(requestId, taskId, newOwnerId, status) {
+    if (APP_CONFIG.demoMode) {
+        await delay(400);
+        let requests = store.get('transfer_requests') || [];
+        const req = requests.find(r => r.id === requestId);
+        if (req) req.status = status;
+        store.set({ transfer_requests: requests });
+        
+        if (status === 'approved') {
+            await updateTask(taskId, { assigned_to: newOwnerId, _silent: true });
+        }
+        return { error: null };
+    }
+    
+    // Handle local fallback requests
+    const requests = store.get('transfer_requests') || [];
+    const localReq = requests.find(r => r.id === requestId && r._local);
+    if (localReq) {
+        localReq.status = status;
+        store.set({ transfer_requests: requests });
+        if (status === 'approved') {
+            await updateTask(taskId, { assigned_to: newOwnerId, _silent: true });
+        }
+        return { error: null };
+    }
+    
+    const updates = { status };
+    if (status === 'approved') updates.approved_at = new Date().toISOString();
+    else if (status === 'rejected') updates.rejected_at = new Date().toISOString();
+    
+    const { error } = await getDB()
+        .from('task_transfer_requests')
+        .update(updates)
+        .eq('id', requestId);
+        
+    if (!error && status === 'approved') {
+        await getDB().from('tasks').update({ assigned_to: newOwnerId }).eq('id', taskId);
+    }
+    
+    return { error };
+}
+
+// ============================================================
+// TASK PROOF (BUKTI FOTO DONE)
+// ============================================================
+
+/**
+ * Upload bukti foto penyelesaian task & set status done
+ * @param {string} taskId
+ * @param {File} file - File foto
+ */
+export async function markTaskDoneWithProof(taskId, file) {
+    const user = store.get('user');
+    
+    if (APP_CONFIG.demoMode) {
+        await delay(500);
+        // Demo: simpan sebagai object URL lokal
+        const localUrl = URL.createObjectURL(file);
+        const result = await updateTask(taskId, { 
+            status: 'done', 
+            progress: 100, 
+            proof_url: localUrl,
+            proof_uploaded_at: new Date().toISOString(),
+            proof_uploaded_by: user?.id,
+            _silent: true 
+        });
+        await logActivity('status_change', 'task', 
+            store.get('tasks').find(t => t.id === taskId)?.title || taskId, 
+            { status: 'done', has_proof: true }
+        );
+        return result;
+    }
+    
+    try {
+        // Upload ke Supabase Storage bucket 'attachments'
+        const ext = file.name.split('.').pop() || 'jpg';
+        const path = `task-proofs/${taskId}/${Date.now()}.${ext}`;
+        
+        const { error: uploadError } = await getDB().storage
+            .from('attachments')
+            .upload(path, file, { upsert: true, contentType: file.type });
+        
+        let proofUrl = null;
+        if (!uploadError) {
+            const { data: { publicUrl } } = getDB().storage
+                .from('attachments')
+                .getPublicUrl(path);
+            proofUrl = publicUrl;
+        } else {
+            console.error('[markTaskDoneWithProof] Storage upload failed:', uploadError);
+            return { data: null, error: uploadError };
+        }
+        
+        // Update task status ke done
+        const result = await updateTask(taskId, {
+            status: 'done',
+            progress: 100,
+            proof_url: proofUrl,
+            proof_uploaded_at: new Date().toISOString(),
+            proof_uploaded_by: user?.id,
+            _silent: true
+        });
+        
+        await logActivity('status_change', 'task', result.data?.title || taskId, { status: 'done', has_proof: !!proofUrl });
+        return result;
+    } catch (err) {
+        console.error('[markTaskDoneWithProof]:', err);
+        return { data: null, error: err };
+    }
+}
+

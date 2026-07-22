@@ -40,6 +40,11 @@ export function renderHeader() {
         </div>
         
         <div class="header-right">
+            <!-- Theme Toggle -->
+            <button class="btn-icon theme-toggle-btn" id="theme-toggle-btn" title="Ganti Tema">
+                <i data-lucide="moon"></i>
+            </button>
+            
             <!-- Notifications -->
             <div class="notification-btn-wrapper" id="notif-wrapper">
                 <button class="btn-icon notification-btn" id="notif-btn" title="Notifikasi">
@@ -102,20 +107,41 @@ export function renderHeader() {
     // Init icons
     if (window.lucide) lucide.createIcons({ nodes: [header] });
     
+    // Render notifikasi
+    renderNotifications();
+    
     // Event listeners
     setupHeaderEvents(header);
-    
-    // Subscribe to store changes
-    store.subscribe(['user', 'unreadNotifications'], () => renderHeader());
 }
 
 // ============================================================
 // EVENT HANDLERS
 // ============================================================
 
+// Flag untuk mencegah event listener duplikat (karena renderHeader bisa dipanggil ulang)
+let _headerEventsInit = false;
+
 function setupHeaderEvents(header) {
     // Mobile menu
     document.getElementById('mobile-menu-btn')?.addEventListener('click', toggleMobileSidebar);
+    
+    // Theme toggle
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) {
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        themeToggleBtn.innerHTML = isLight ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
+        if (window.lucide) lucide.createIcons({ nodes: [themeToggleBtn] });
+        
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('eeprom_theme', newTheme);
+            
+            themeToggleBtn.innerHTML = newTheme === 'light' ? '<i data-lucide="sun"></i>' : '<i data-lucide="moon"></i>';
+            if (window.lucide) lucide.createIcons({ nodes: [themeToggleBtn] });
+        });
+    }
     
     // Notification dropdown
     const notifBtn = document.getElementById('notif-btn');
@@ -138,15 +164,35 @@ function setupHeaderEvents(header) {
         notifWrapper?.classList.remove('open');
     });
     
-    // Close dropdowns on outside click
-    document.addEventListener('click', (e) => {
-        if (!notifWrapper?.contains(e.target)) notifWrapper?.classList.remove('open');
-        if (!userMenuWrapper?.contains(e.target)) userMenuWrapper?.classList.remove('open');
-    }, { capture: true });
+    // Close dropdowns on outside click — hanya pasang sekali
+    if (!_headerEventsInit) {
+        document.addEventListener('click', (e) => {
+            const nw = document.getElementById('notif-wrapper');
+            const umw = document.getElementById('user-menu-wrapper');
+            if (!nw?.contains(e.target)) nw?.classList.remove('open');
+            if (!umw?.contains(e.target)) umw?.classList.remove('open');
+        }, { capture: true });
+        
+        // Keyboard shortcut for search — hanya pasang sekali
+        document.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('global-search-input')?.focus();
+            }
+        });
+        
+        // Subscribe to store changes (hanya sekali)
+        store.subscribe(['user', 'unreadNotifications'], () => renderHeader());
+        
+        _headerEventsInit = true;
+    }
     
-    // Logout
-    document.getElementById('logout-btn')?.addEventListener('click', () => {
-        logout();
+    // Logout — dengan konfirmasi
+    document.getElementById('logout-btn')?.addEventListener('click', async () => {
+        // Tampilkan konfirmasi kecil
+        const confirmed = window.confirm('Yakin ingin keluar dari aplikasi?');
+        if (!confirmed) return;
+        await logout();
     });
     
     // Dropdown items navigation
@@ -163,14 +209,6 @@ function setupHeaderEvents(header) {
     // Global search
     const searchInput = document.getElementById('global-search-input');
     searchInput?.addEventListener('input', debounce(handleGlobalSearch, 300));
-    
-    // Keyboard shortcut for search
-    document.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-            e.preventDefault();
-            searchInput?.focus();
-        }
-    });
 }
 
 // ============================================================
@@ -181,7 +219,11 @@ function renderNotifications() {
     const notifList = document.getElementById('notif-list');
     if (!notifList) return;
     
-    const notifications = store.get('notifications');
+    const user = store.get('user');
+    if (!user) return;
+    
+    let notifications = store.get('notifications') || [];
+    notifications = notifications.filter(n => !n.user_id || n.user_id === user.id);
     
     if (!notifications.length) {
         notifList.innerHTML = `
