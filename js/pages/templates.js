@@ -309,7 +309,7 @@ function showTemplateForm(template = null) {
                         </div>
                     ` : ''}
                     <input type="file" name="file" id="tpl-file-input" accept=".doc,.docx,.pdf,.odt" style="display:none;">
-                    <button type="button" class="btn btn-ghost" id="tpl-file-btn" style="width:100%;padding:20px;border:2px dashed rgba(255,255,255,0.15);border-radius:12px;">
+                    <button type="button" class="btn btn-ghost" id="tpl-file-btn" style="width:100%;padding:20px;border:2px dashed var(--border-hover);border-radius:12px;">
                         <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
                             <i data-lucide="upload-cloud" style="width:32px;height:32px;color:var(--primary);"></i>
                             <span style="font-size:0.85rem;">Klik untuk upload file .docx / .pdf</span>
@@ -633,8 +633,8 @@ function showTemplateView(template) {
             ` : ''}
             ${template.content && !template.content.startsWith('[File:') ? `
                 <pre style="
-                    background: rgba(255,255,255,0.05);
-                    border: 1px solid rgba(255,255,255,0.1);
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border);
                     border-radius: 12px;
                     padding: 16px;
                     white-space: pre-wrap;
@@ -642,7 +642,7 @@ function showTemplateView(template) {
                     font-family: 'Poppins', sans-serif;
                     font-size: 0.9rem;
                     line-height: 1.7;
-                    color: var(--text-primary, #e2e8f0);
+                    color: var(--text);
                     max-height: 60vh;
                     overflow-y: auto;
                 ">${template.content}</pre>

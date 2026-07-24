@@ -4145,7 +4145,7 @@ input[type="range"]::-webkit-slider-thumb {
 .splash-title {
     font-size: 1.6rem;
     font-weight: 800;
-    color: white;
+    color: var(--text);
     letter-spacing: 0.04em;
     text-align: center;
 }
