@@ -18,8 +18,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
@@ -28,15 +27,480 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <link rel="stylesheet" href="style.css">
+    
+    <style>
+        /* ====================================================
+           LOGIN PAGE — PREMIUM REDESIGN
+        ==================================================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body.login-page {
+            font-family: 'Plus Jakarta Sans', 'Poppins', sans-serif;
+            background: #0A0A14;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Animated background */
+        .login-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .login-bg::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(108, 99, 255, 0.25), transparent),
+                        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(139, 92, 246, 0.15), transparent),
+                        radial-gradient(ellipse 50% 40% at 10% 60%, rgba(6, 182, 212, 0.1), transparent);
+        }
+
+        /* Floating orbs */
+        .bg-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            animation: orbFloat 10s ease-in-out infinite;
+            pointer-events: none;
+        }
+        .orb-1 {
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(108, 99, 255, 0.18), transparent 70%);
+            top: -15%; left: -10%;
+            animation-delay: 0s;
+        }
+        .orb-2 {
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.15), transparent 70%);
+            bottom: -10%; right: -10%;
+            animation-delay: -4s;
+        }
+        .orb-3 {
+            width: 300px; height: 300px;
+            background: radial-gradient(circle, rgba(6, 182, 212, 0.1), transparent 70%);
+            top: 40%; left: 35%;
+            animation-delay: -7s;
+        }
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -20px) scale(1.05); }
+            66% { transform: translate(-20px, 15px) scale(0.95); }
+        }
+
+        /* Grid lines overlay */
+        .bg-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(108, 99, 255, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(108, 99, 255, 0.04) 1px, transparent 1px);
+            background-size: 60px 60px;
+        }
+
+        /* ---- Main Layout ---- */
+        .login-container {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: 1fr 480px;
+            min-height: 100vh;
+        }
+
+        /* ---- Left Branding Panel ---- */
+        .login-brand-panel {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 60px 70px;
+            position: relative;
+        }
+
+        .brand-content { max-width: 520px; }
+
+        .brand-logo-wrap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 80px; height: 80px;
+            background: rgba(108, 99, 255, 0.12);
+            border: 1px solid rgba(108, 99, 255, 0.25);
+            border-radius: 20px;
+            margin-bottom: 28px;
+            backdrop-filter: blur(10px);
+        }
+
+        .brand-title {
+            font-size: 3.2rem;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1.05;
+            letter-spacing: -1.5px;
+            margin-bottom: 16px;
+        }
+        .brand-title span {
+            background: linear-gradient(135deg, #6C63FF 0%, #8B5CF6 50%, #06B6D4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-desc {
+            font-size: 1rem;
+            color: rgba(255,255,255,0.5);
+            line-height: 1.7;
+            margin-bottom: 40px;
+            max-width: 400px;
+        }
+
+        /* Stats row */
+        .brand-stats {
+            display: flex;
+            gap: 32px;
+            margin-bottom: 44px;
+        }
+        .brand-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .brand-stat-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -1px;
+            line-height: 1;
+        }
+        .brand-stat-value span {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #6C63FF;
+        }
+        .brand-stat-label {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.4);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 500;
+        }
+        .brand-stat-divider {
+            width: 1px;
+            background: rgba(255,255,255,0.08);
+            align-self: stretch;
+        }
+
+        /* Feature grid */
+        .brand-features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .brand-feature {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px;
+            font-size: 0.82rem;
+            color: rgba(255,255,255,0.65);
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: default;
+        }
+        .brand-feature:hover {
+            background: rgba(108, 99, 255, 0.1);
+            border-color: rgba(108, 99, 255, 0.25);
+            color: rgba(255,255,255,0.9);
+        }
+        .feature-icon {
+            width: 30px; height: 30px;
+            background: rgba(108, 99, 255, 0.15);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            color: #8B84FF;
+        }
+        .feature-icon svg { width: 14px; height: 14px; }
+
+        /* Scroll ticker */
+        .brand-ticker {
+            margin-top: 40px;
+            overflow: hidden;
+            mask-image: linear-gradient(90deg, transparent, black 20%, black 80%, transparent);
+        }
+        .brand-ticker-inner {
+            display: flex;
+            gap: 32px;
+            animation: tickerScroll 20s linear infinite;
+            width: max-content;
+        }
+        .brand-ticker-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.3);
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        .brand-ticker-item .dot {
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            background: rgba(108, 99, 255, 0.6);
+        }
+        @keyframes tickerScroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* ---- Right Form Panel ---- */
+        .login-form-panel {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 24px;
+            background: rgba(255,255,255,0.02);
+            border-left: 1px solid rgba(255,255,255,0.06);
+            backdrop-filter: blur(20px);
+        }
+
+        .login-form-card {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-form-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .login-logo-circle {
+            width: 64px; height: 64px;
+            background: linear-gradient(135deg, #6C63FF, #8B5CF6);
+            border-radius: 18px;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 20px;
+            box-shadow: 0 0 30px rgba(108, 99, 255, 0.4);
+        }
+
+        .login-form-header h2 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+        .login-form-header p {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.45);
+        }
+
+        /* Form fields */
+        .login-form-card .form-group {
+            margin-bottom: 16px;
+        }
+        .login-form-card label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: rgba(255,255,255,0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            margin-bottom: 8px;
+        }
+        .login-form-card .input-icon-wrapper {
+            position: relative;
+        }
+        .login-form-card .input-icon-wrapper > svg,
+        .login-form-card .input-icon-wrapper > i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px; height: 16px;
+            color: rgba(255,255,255,0.3);
+            pointer-events: none;
+        }
+        .login-form-card .form-input {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 13px 14px 13px 42px;
+            color: #fff;
+            font-size: 0.9rem;
+            font-family: inherit;
+            transition: all 0.2s;
+            outline: none;
+        }
+        .login-form-card .form-input::placeholder { color: rgba(255,255,255,0.2); }
+        .login-form-card .form-input:focus {
+            border-color: rgba(108, 99, 255, 0.6);
+            background: rgba(108, 99, 255, 0.08);
+            box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.15);
+        }
+        .login-form-card .form-group.error .form-input {
+            border-color: rgba(239, 68, 68, 0.5);
+            background: rgba(239, 68, 68, 0.05);
+        }
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: rgba(255,255,255,0.3);
+            padding: 4px;
+            display: flex;
+            transition: color 0.2s;
+        }
+        .password-toggle:hover { color: rgba(255,255,255,0.7); }
+        .password-toggle svg { width: 16px; height: 16px; }
+
+        /* Submit button */
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #6C63FF, #8B5CF6);
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+            transition: all 0.25s;
+            box-shadow: 0 4px 20px rgba(108, 99, 255, 0.35);
+            position: relative;
+            overflow: hidden;
+        }
+        .login-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .login-btn:hover { 
+            transform: translateY(-1px);
+            box-shadow: 0 8px 30px rgba(108, 99, 255, 0.5);
+        }
+        .login-btn:hover::before { opacity: 1; }
+        .login-btn:active { transform: translateY(0); }
+        .login-btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+        .login-btn svg { width: 17px; height: 17px; }
+
+        /* Error box */
+        .login-error {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: 10px;
+            color: #FCA5A5;
+            font-size: 0.82rem;
+            margin-bottom: 12px;
+        }
+        .login-error svg { width: 15px; height: 15px; flex-shrink: 0; color: #EF4444; }
+
+        /* Footer */
+        .login-footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.3);
+        }
+        .login-footer strong { color: rgba(255,255,255,0.6); }
+
+        /* Spinner */
+        .spinner-sm {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---- Responsive ---- */
+        @media (max-width: 900px) {
+            .login-container {
+                grid-template-columns: 1fr;
+                overflow-y: auto;
+                min-height: 100vh;
+            }
+            .login-brand-panel {
+                padding: 40px 32px 24px;
+                border-bottom: 1px solid rgba(255,255,255,0.06);
+            }
+            .brand-title { font-size: 2.2rem; }
+            .brand-stats { gap: 20px; }
+            .login-form-panel {
+                border-left: none;
+                padding: 32px 24px 48px;
+            }
+            body.login-page { overflow-y: auto; }
+        }
+        @media (max-width: 480px) {
+            .login-brand-panel { padding: 32px 20px 20px; }
+            .brand-title { font-size: 1.8rem; }
+            .brand-features { grid-template-columns: 1fr; }
+            .brand-stats { flex-wrap: wrap; gap: 16px; }
+        }
+
+        /* Splash */
+        .splash-screen {
+            position: fixed;
+            inset: 0;
+            background: #0A0A14;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+        .splash-content { text-align: center; }
+        .splash-logo { width: 80px; height: 80px; object-fit: contain; margin-bottom: 20px; animation: splashPulse 1.5s ease-in-out infinite; }
+        .splash-title { font-size: 1.1rem; font-weight: 700; color: rgba(255,255,255,0.4); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 14px; }
+        .splash-title span { color: #6C63FF; }
+        .splash-spinner { width: 36px; height: 36px; border: 2px solid rgba(108,99,255,0.2); border-top-color: #6C63FF; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
+        @keyframes splashPulse { 0%,100% { opacity: 0.8; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
+
+        /* Loading skeleton for stats */
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .stat-loading {
+            background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+            display: inline-block;
+        }
+    </style>
 </head>
 <body class="login-page">
     
     <!-- Splash Screen -->
     <div id="splash-screen" class="splash-screen">
         <div class="splash-content">
-            <div class="splash-logo-wrap">
-                <img src="./images/eeprom no bg.png" alt="EEPROM Logo" class="splash-logo">
-            </div>
+            <img src="./images/eeprom no bg.png" alt="EEPROM Logo" class="splash-logo">
             <div class="splash-spinner"></div>
             <h1 class="splash-title">SOP HUMAS <span>EEPROM</span></h1>
         </div>
@@ -55,17 +519,35 @@
         <div class="login-brand-panel">
             <div class="brand-content">
                 <div class="brand-logo-wrap">
-                    <img src="./images/eeprom no bg.png" alt="EEPROM Logo" style="width: 72px; height: 72px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(108, 99, 255, 0.5));">
+                    <img src="./images/eeprom no bg.png" alt="EEPROM Logo" style="width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(108, 99, 255, 0.5));">
                 </div>
                 
                 <h1 class="brand-title">EEPROM<br><span>Humas</span></h1>
-                <p class="brand-desc">Sistem manajemen internal Divisi Humas untuk mendokumentasikan seluruh kegiatan periode kepengurusan.</p>
+                <p class="brand-desc">Sistem manajemen internal Divisi Humas untuk mendokumentasikan seluruh kegiatan periode kepengurusan secara efisien.</p>
                 
-                <!-- Feature List -->
+                <!-- Live Stats -->
+                <div class="brand-stats">
+                    <div class="brand-stat">
+                        <div class="brand-stat-value" id="stat-programs"><span class="stat-loading" style="width:40px;height:28px;">&nbsp;</span></div>
+                        <div class="brand-stat-label">Program Kerja</div>
+                    </div>
+                    <div class="brand-stat-divider"></div>
+                    <div class="brand-stat">
+                        <div class="brand-stat-value" id="stat-tasks"><span class="stat-loading" style="width:40px;height:28px;">&nbsp;</span></div>
+                        <div class="brand-stat-label">Total Task</div>
+                    </div>
+                    <div class="brand-stat-divider"></div>
+                    <div class="brand-stat">
+                        <div class="brand-stat-value" id="stat-members"><span class="stat-loading" style="width:40px;height:28px;">&nbsp;</span></div>
+                        <div class="brand-stat-label">Anggota Tim</div>
+                    </div>
+                </div>
+                
+                <!-- Feature Grid -->
                 <div class="brand-features">
                     <div class="brand-feature">
                         <div class="feature-icon"><i data-lucide="briefcase"></i></div>
-                        <span>8 Program Kerja</span>
+                        <span>Program Kerja</span>
                     </div>
                     <div class="brand-feature">
                         <div class="feature-icon"><i data-lucide="check-square"></i></div>
@@ -81,29 +563,23 @@
                     </div>
                 </div>
             </div>
-            
-            <!-- Floating Cards Preview -->
-            <div class="floating-cards">
-                <div class="float-card fc-1">
-                    <div class="fc-icon" style="color:#10B981"><i data-lucide="trending-up"></i></div>
-                    <div>
-                        <div class="fc-value">87%</div>
-                        <div class="fc-label">Avg Progress</div>
-                    </div>
-                </div>
-                <div class="float-card fc-2">
-                    <div class="fc-icon" style="color:#F59E0B"><i data-lucide="check-circle"></i></div>
-                    <div>
-                        <div class="fc-value">42</div>
-                        <div class="fc-label">Task Selesai</div>
-                    </div>
-                </div>
-                <div class="float-card fc-3">
-                    <div class="fc-icon" style="color:#EC4899"><i data-lucide="image"></i></div>
-                    <div>
-                        <div class="fc-value">128</div>
-                        <div class="fc-label">Dokumentasi</div>
-                    </div>
+
+            <!-- Ticker -->
+            <div class="brand-ticker" style="margin-top: 36px;">
+                <div class="brand-ticker-inner" id="ticker-inner">
+                    <span class="brand-ticker-item"><span class="dot"></span>Manajemen Proker Terpadu</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Pelacakan Tugas Real-time</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Arsip Dokumentasi Digital</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Laporan Otomatis</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Notifikasi Instan</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Kolaborasi Tim Efektif</span>
+                    <!-- Duplicate for seamless loop -->
+                    <span class="brand-ticker-item"><span class="dot"></span>Manajemen Proker Terpadu</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Pelacakan Tugas Real-time</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Arsip Dokumentasi Digital</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Laporan Otomatis</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Notifikasi Instan</span>
+                    <span class="brand-ticker-item"><span class="dot"></span>Kolaborasi Tim Efektif</span>
                 </div>
             </div>
         </div>
@@ -112,59 +588,22 @@
         <div class="login-form-panel">
             <div class="login-form-card">
                 <div class="login-form-header">
-                    <!-- Mobile Brand Header -->
-                    <div class="mobile-brand-header">
-                        <div class="mobile-brand-logo">
-                            <svg width="48" height="48" viewBox="0 0 72 72" fill="none">
-                                <rect width="72" height="72" rx="16" fill="url(#mobileLoginGrad)"/>
-                                <defs>
-                                    <linearGradient id="mobileLoginGrad" x1="0" y1="0" x2="72" y2="72">
-                                        <stop offset="0%" stop-color="#6C63FF"/>
-                                        <stop offset="100%" stop-color="#8B5CF6"/>
-                                    </linearGradient>
-                                </defs>
-                                <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="26" font-weight="800" font-family="Poppins,sans-serif">EH</text>
-                            </svg>
-                        </div>
-                        <div class="mobile-brand-title">EEPROM <span>Humas</span></div>
+                    <div class="login-logo-circle">
+                        <img src="./images/eeprom no bg.png" alt="EEPROM" style="width: 38px; height: 38px; object-fit: contain; filter: brightness(0) invert(1);">
                     </div>
                     <h2>Masuk ke Sistem</h2>
                     <p>Gunakan akun Humas EEPROM Anda</p>
                 </div>
                 
-                <!-- Demo Mode Banner -->
-                <div class="demo-banner">
-                    <i data-lucide="info"></i>
-                    <div>
-                        <strong>Demo Mode Aktif</strong>
-                        <p>Gunakan: <code>admin@eeprom.ac.id</code> / password apapun (min. 6 karakter)</p>
-                    </div>
-                </div>
-                
-                <!-- Quick Login Buttons -->
-                <div class="quick-login-btns">
-                    <button class="quick-login-btn" data-email="admin@eeprom.ac.id">
-                        <i data-lucide="shield"></i> Super Admin
-                    </button>
-                    <button class="quick-login-btn" data-email="ketua@eeprom.ac.id">
-                        <i data-lucide="award"></i> Ketua Humas
-                    </button>
-                    <button class="quick-login-btn" data-email="staff@eeprom.ac.id">
-                        <i data-lucide="user"></i> Staff Humas
-                    </button>
-                </div>
-                
-                <div class="divider-text"><span>atau masukkan manual</span></div>
-                
                 <!-- Login Form -->
-                <form id="login-form" class="form" novalidate>
+                <form id="login-form" novalidate>
                     <div class="form-group" id="email-group">
                         <label for="email">Email</label>
                         <div class="input-icon-wrapper">
                             <i data-lucide="mail"></i>
                             <input type="email" id="email" name="email" 
                                    class="form-input" 
-                                   placeholder="email@eeprom.ac.id"
+                                   placeholder="email@student.polinema.ac.id"
                                    autocomplete="email"
                                    required>
                         </div>
@@ -191,11 +630,11 @@
                         <span id="login-error-msg"></span>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary btn-full" id="login-btn">
-                        <span id="login-btn-text">
+                    <button type="submit" class="login-btn" id="login-btn">
+                        <span id="login-btn-text" style="display:flex;align-items:center;gap:8px;">
                             <i data-lucide="log-in"></i> Masuk
                         </span>
-                        <span id="login-btn-loading" style="display:none">
+                        <span id="login-btn-loading" style="display:none;align-items:center;gap:8px;">
                             <span class="spinner-sm"></span> Memproses...
                         </span>
                     </button>
@@ -212,9 +651,8 @@
     <div id="toast-container" class="toast-container"></div>
     
     <script type="module">
-        import { login, checkSession } from './js/auth.js';
-        import { initSupabase } from './js/auth.js';
-        import { APP_CONFIG } from './js/config.js';
+        import { login, checkSession, initSupabase, getSupabase } from './js/auth.js';
+        import { APP_CONFIG, SUPABASE_URL, SUPABASE_ANON_KEY } from './js/config.js';
         import { initPWA } from './js/pwa.js';
         
         // Init PWA
@@ -231,23 +669,63 @@
             }, 800);
         });
 
-        // Init
+        // Init Supabase
         initSupabase();
         lucide.createIcons();
         
-        // Hide demo elements if not in demo mode
-        if (!APP_CONFIG.demoMode) {
-            document.querySelector('.demo-banner')?.remove();
-            document.querySelector('.quick-login-btns')?.remove();
-            const dividerText = document.querySelector('.divider-text');
-            if (dividerText) dividerText.remove();
+        // Load real stats from Supabase
+        async function loadStats() {
+            if (APP_CONFIG.demoMode) {
+                document.getElementById('stat-programs').textContent = '7';
+                document.getElementById('stat-tasks').textContent = '42+';
+                document.getElementById('stat-members').textContent = '10+';
+                return;
+            }
+            
+            try {
+                const supabase = getSupabase();
+                if (!supabase) return;
+                
+                // Fetch counts in parallel
+                const [programsRes, tasksRes, membersRes] = await Promise.all([
+                    supabase.from('programs').select('id', { count: 'exact', head: true }),
+                    supabase.from('tasks').select('id', { count: 'exact', head: true }),
+                    supabase.from('profiles').select('id', { count: 'exact', head: true })
+                ]);
+                
+                const programs = programsRes.count || 0;
+                const tasks = tasksRes.count || 0;
+                const members = membersRes.count || 0;
+                
+                animateCount('stat-programs', programs);
+                animateCount('stat-tasks', tasks);
+                animateCount('stat-members', members);
+            } catch (err) {
+                // Fallback gracefully
+                document.getElementById('stat-programs').textContent = '7';
+                document.getElementById('stat-tasks').textContent = '—';
+                document.getElementById('stat-members').textContent = '—';
+            }
         }
+        
+        function animateCount(elId, target) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            let current = 0;
+            const duration = 1200;
+            const step = target / (duration / 16);
+            const timer = setInterval(() => {
+                current = Math.min(current + step, target);
+                el.textContent = Math.round(current);
+                if (current >= target) clearInterval(timer);
+            }, 16);
+        }
+        
+        loadStats();
         
         // Check if already logged in
         checkSession().then(isAuth => {
-            if (isAuth) {
-                window.location.href = './app.html';
-            }
+            if (isAuth) window.location.href = './app.html';
         });
         
         // Login form
@@ -291,11 +769,10 @@
             setLoading(false);
             
             if (error) {
-                showError(error.message || 'Login gagal');
+                showError(error.message || 'Email atau password salah. Silakan coba lagi.');
                 document.getElementById('email-group').classList.add('error');
                 document.getElementById('password-group').classList.add('error');
             } else {
-                // Redirect to app
                 window.location.href = './app.html';
             }
         });
@@ -321,23 +798,9 @@
             }
             lucide.createIcons({ nodes: [document.getElementById('pass-toggle')] });
         });
-        
-        // Quick login buttons
-        document.querySelectorAll('.quick-login-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const email = btn.dataset.email;
-                document.getElementById('email').value = email;
-                document.getElementById('password').value = 'demo123';
-                hideError();
-                document.querySelectorAll('.quick-login-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-            });
-        });
-        
-        // Floating card animation
-        document.querySelectorAll('.float-card').forEach((card, i) => {
-            card.style.animationDelay = `${i * 0.5}s`;
-        });
+
+        // Re-init icons after dynamic content
+        lucide.createIcons();
     </script>
 </body>
 </html>

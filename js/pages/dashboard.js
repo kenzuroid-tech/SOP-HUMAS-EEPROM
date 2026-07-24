@@ -161,16 +161,6 @@ function getAdminDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, st
                 </div>
             </div>
             
-            <!-- Task Chart -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title"><i data-lucide="pie-chart"></i> Status Task</h3>
-                </div>
-                <div class="card-body chart-container">
-                    <canvas id="task-chart" height="200"></canvas>
-                    <div class="chart-legend" id="task-chart-legend"></div>
-                </div>
-            </div>
         </div>
         
         <div class="dashboard-grid-3">
@@ -214,7 +204,7 @@ function getAdminDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, st
                     ${transferRequests.length === 0 
                         ? `<div class="empty-state compact"><p>Tidak ada request pending</p></div>`
                         : `<div class="activity-list">
-                            ${transferRequests.map(req => getTransferRequestItem(req)).join('')}
+                            ${transferRequests.map(req => getTransferRequestItem(req, user)).join('')}
                            </div>`
                     }
                 </div>
@@ -240,15 +230,6 @@ function getAdminDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, st
             </div>
         </div>
 
-        <!-- Progress Chart -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title"><i data-lucide="bar-chart-2"></i> Grafik Progress Program Kerja</h3>
-            </div>
-            <div class="card-body">
-                <canvas id="progress-chart" height="80"></canvas>
-            </div>
-        </div>
     `;
 }
 
@@ -342,40 +323,27 @@ function getStaffDashboardHTML(programs, tasks, taskStats, upcomingDeadlines, gr
             </div>
         </div>
         
-        <!-- TUGAS TIM (read-only, bisa ajukan alih tugas) -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title"><i data-lucide="users"></i> Tugas Anggota Lain</h3>
-                <span class="text-xs text-muted">Bisa dilihat, ubah status hanya oleh pemilik tugas</span>
-            </div>
-            <div class="card-body" style="padding: 0">
-                ${teamTasks.length === 0
-                    ? `<div class="empty-state compact" style="padding:1.5rem">
-                           <p class="text-muted">Tidak ada tugas dari anggota lain.</p>
-                       </div>`
-                    : teamTasks.map(t => getTeamTaskRow(t, user)).join('')
-                }
-            </div>
-        </div>
-        
-        <!-- Transfer Requests (Hanya tampilkan jika ada request yang terkait user) -->
-        ${(() => {
-            const myRequests = transferRequests.filter(req => req.owner_id === user.id || req.requester_id === user.id);
-            if (myRequests.length === 0) return '';
-            
-            return `
-            <div class="card" style="margin-bottom: 1.5rem">
+        <!-- TUGAS TIM & TRANSFER REQUESTS (Grid) -->
+        <div id="team-tasks-grid" class="dashboard-grid-equal" style="align-items: start;">
+            <div class="card" style="margin-bottom: 0;">
                 <div class="card-header">
-                    <h3 class="card-title"><i data-lucide="user-plus"></i> Request Pergantian Tugas Saya</h3>
+                    <h3 class="card-title"><i data-lucide="users"></i> Tugas Anggota Lain</h3>
+                    <span class="text-xs text-muted">Bisa dilihat, ubah status hanya oleh pemilik tugas</span>
                 </div>
-                <div class="card-body">
-                    <div class="activity-list">
-                        ${myRequests.map(req => getTransferRequestItem(req)).join('')}
-                    </div>
+                <div class="card-body" style="padding: 0">
+                    ${teamTasks.length === 0
+                        ? '<div class="empty-state compact" style="padding:1.5rem"><p class="text-muted">Tidak ada tugas dari anggota lain.</p></div>'
+                        : teamTasks.map(t => getTeamTaskRow(t, user)).join('')
+                    }
                 </div>
             </div>
-            `;
-        })()}
+            
+            ${(() => {
+                const myRequests = transferRequests.filter(req => req.owner_id === user.id || req.requester_id === user.id);
+                if (myRequests.length === 0) return '';
+                return '<div class="card" style="margin-bottom: 0;" id="transfer-requests-card"><div class="card-header"><h3 class="card-title"><i data-lucide="user-plus"></i> Request Pergantian Tugas Saya</h3></div><div class="card-body"><div class="activity-list">' + myRequests.map(req => getTransferRequestItem(req, user)).join('') + '</div></div></div>';
+            })()}
+        </div>
     `;
 }
 
@@ -585,7 +553,28 @@ function getActivityItem(log) {
     `;
 }
 
-function getTransferRequestItem(req) {
+function getTransferRequestItem(req, user) {
+    const isOwner = req.owner_id === user?.id;
+    const isPending = req.status === 'pending';
+    
+    let actionHtml = '';
+    if (isPending) {
+        if (isOwner) {
+            actionHtml = `
+                <div class="flex gap-2">
+                    <button class="btn btn-primary btn-xs" onclick="handleTransferApproval('${req.id}', '${req.task_id}', '${req.requester_id}', 'approved')">Approve</button>
+                    <button class="btn btn-outline btn-xs" onclick="handleTransferApproval('${req.id}', '${req.task_id}', '${req.requester_id}', 'rejected')">Reject</button>
+                </div>
+            `;
+        } else {
+            actionHtml = `<div class="badge badge-warning text-xs">Menunggu Konfirmasi</div>`;
+        }
+    } else if (req.status === 'approved') {
+        actionHtml = `<div class="badge badge-success text-xs">Disetujui</div>`;
+    } else if (req.status === 'rejected') {
+        actionHtml = `<div class="badge badge-danger text-xs">Ditolak</div>`;
+    }
+
     return `
         <div class="activity-item">
             <div class="activity-icon" style="background: #F59E0B20; color: #F59E0B">
@@ -594,15 +583,12 @@ function getTransferRequestItem(req) {
             <div class="activity-content">
                 <div class="activity-text" style="font-size: 13px;">
                     <strong>${req.requester?.full_name || req.requester_name}</strong> ingin mengambil alih task 
-                    <strong>${req.tasks?.title || 'Task'}</strong>
+                    <strong>${req.tasks?.title || req.tasks?.title || 'Task'}</strong>
                 </div>
                 <div class="activity-time text-xs text-muted" style="margin-bottom: 8px;">
                     Alasan: "${req.reason}"
                 </div>
-                <div class="flex gap-2">
-                    <button class="btn btn-primary btn-xs" onclick="handleTransferApproval('${req.id}', '${req.task_id}', '${req.requester_id}', 'approved')">Approve</button>
-                    <button class="btn btn-outline btn-xs" onclick="handleTransferApproval('${req.id}', '${req.task_id}', '${req.requester_id}', 'rejected')">Reject</button>
-                </div>
+                ${actionHtml}
             </div>
         </div>
     `;
@@ -1168,18 +1154,39 @@ function initDashboardEvents(container, tasks) {
 window.handleTransferApproval = async function(requestId, taskId, newOwnerId, status) {
     const { updateTransferRequestStatus } = await import('../api/tasks.js');
     const { toast } = await import('../utils.js');
+    const { store } = await import('../store.js');
     
     const { error } = await updateTransferRequestStatus(requestId, taskId, newOwnerId, status);
     
     if (error) {
         toast.error('Gagal memproses request');
     } else {
-        toast.success(`Request berhasil di-${status}`);
+        const label = status === 'approved' ? 'Disetujui' : 'Ditolak';
+        const badgeColor = status === 'approved' ? 'badge-success' : 'badge-danger';
+        toast.success(`Request berhasil ${label.toLowerCase()}`);
         
-        // Refresh dashboard (assuming we are on dashboard page)
-        const container = document.getElementById('app-content');
-        if (container) {
-            render(container);
-        }
+        // Update UI in-place — cari semua tombol approve/reject dalam item ini lalu ganti dengan badge
+        const allItems = document.querySelectorAll('.activity-item');
+        allItems.forEach(item => {
+            const approveBtn = item.querySelector(`[onclick*="'${requestId}'"]`);
+            if (approveBtn) {
+                const actionsDiv = approveBtn.closest('.flex, div');
+                if (actionsDiv) {
+                    actionsDiv.outerHTML = '<div class="badge ' + badgeColor + ' text-xs">' + label + '</div>';
+                }
+            }
+        });
+        
+        // Hapus notifikasi terkait dari store agar badge lonceng langsung hilang
+        const allNotifs = store.get('notifications') || [];
+        const taskTitle = store.get('tasks')?.find(t => t.id === taskId)?.title || '';
+        const filteredNotifs = allNotifs.filter(n => 
+            !(n.title === 'Permintaan Pergantian Tugas' && (n.resource_id === taskId || (taskTitle && n.message && n.message.includes('"' + taskTitle + '"'))))
+        );
+        store.set({
+            notifications: filteredNotifs,
+            unreadNotifications: filteredNotifs.filter(n => !n.is_read).length
+        });
     }
 };
+

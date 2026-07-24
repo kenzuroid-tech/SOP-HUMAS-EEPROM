@@ -1308,6 +1308,13 @@ input[type="range"]::-webkit-slider-thumb {
     margin-bottom: 20px;
 }
 
+.dashboard-grid-equal {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
 .dashboard-grid-3 {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -3894,126 +3901,159 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 @media (max-width: 768px) {
-    .main-content { padding: 16px 14px; }
+    /* ---- Layout ---- */
+    .main-content { padding: 14px 12px 80px; }
     
     .page-header {
         flex-direction: column;
-        gap: 14px;
+        gap: 12px;
+        margin-bottom: 16px;
     }
-    
-    .page-title { font-size: 1.3rem; }
-    
-    .stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-    
+    .page-title { font-size: 1.25rem; }
+    .page-actions { width: 100%; gap: 8px; }
+    .page-actions .btn { flex: 1; justify-content: center; font-size: 0.82rem; padding: 8px 12px; }
+
+    /* ---- Grids ---- */
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .dashboard-grid { grid-template-columns: 1fr; }
+    .dashboard-grid-equal { grid-template-columns: 1fr; }
     .dashboard-grid-3 { grid-template-columns: 1fr; }
-    
     .programs-grid { grid-template-columns: 1fr; }
-    
     .task-cards { grid-template-columns: 1fr; }
-    
     .templates-grid { grid-template-columns: 1fr; }
-    
     .gallery-grid { grid-template-columns: repeat(2, 1fr); }
-    
     .form-grid { grid-template-columns: 1fr; }
     .form-group.span-2 { grid-column: span 1; }
-    
     .score-grid { grid-template-columns: repeat(3, 1fr); }
     .score-input-grid { grid-template-columns: 1fr 1fr; }
-    
     .eval-cards-grid { grid-template-columns: 1fr; }
-    
     .db-stats-grid { grid-template-columns: repeat(2, 1fr); }
-    
     .kanban-board { grid-template-columns: 1fr; }
-    
     .overview-grid { grid-template-columns: 1fr; }
-    
-    .toolbar { flex-direction: column; align-items: stretch; }
-    .toolbar-left, .toolbar-right { width: 100%; }
-    
-    .search-input-wrapper input { width: 100%; }
-    .search-input-wrapper input:focus { width: 100%; }
-    
-    .program-detail-title-row { flex-direction: column; }
-    .program-quick-stats { flex-direction: column; }
-    
-    /* Login form mobile */
-    .login-form-panel { padding: 28px 18px; }
-    .login-form-header h2 { font-size: 1.5rem; }
-    
-    /* Quick login — stack to single column on small screens */
-    .quick-login-btns {
-        grid-template-columns: 1fr;
-        gap: 10px;
-    }
-    .quick-login-btn {
-        flex-direction: row;
-        gap: 10px;
-        padding: 12px 16px;
-        font-size: 0.85rem;
-        justify-content: flex-start;
-    }
-    .quick-login-btn svg { width: 18px; height: 18px; }
-    
-    .modal { margin: 12px; }
-    
-    .toast-container { left: 12px; right: 12px; bottom: 12px; }
 
-    /* Mobile Header & Profile Dropdown Optimizations */
+    /* ---- Cards ---- */
+    .card { border-radius: 12px; }
+    .card-header { padding: 14px 16px; }
+    .card-body { padding: 14px 16px; }
+    .stat-card { padding: 14px 16px; border-radius: 12px; }
+    .stat-value { font-size: 1.5rem; }
+    .stat-icon { width: 40px; height: 40px; }
+    .stat-icon svg { width: 18px; height: 18px; }
+
+    /* ---- Header ---- */
+    .header { padding: 0 12px; height: 56px; }
     .notification-dropdown {
-        width: 320px;
-        max-width: 92vw;
-        right: -60px;
+        width: min(340px, 94vw);
+        right: -50px;
+        max-height: 70vh;
     }
     .user-dropdown {
-        width: 250px;
-        max-width: 92vw;
+        width: min(260px, 92vw);
     }
-    .user-info-header {
-        display: none;
-    }
+    .user-info-header { display: none; }
     .user-menu-btn {
         padding: 4px;
         background: transparent;
         border-color: transparent;
     }
-    .user-menu-btn i[data-lucide="chevron-down"] {
-        display: none;
-    }
-    
-    /* Elegant Sidebar Mobile State */
+    .user-menu-btn i[data-lucide="chevron-down"] { display: none; }
+    .header-logo-text .logo-subtitle { display: none; }
+
+    /* ---- Sidebar overlay ---- */
     .sidebar {
-        box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(10px);
+        box-shadow: 0 0 60px rgba(0,0,0,0.6);
+        backdrop-filter: blur(12px);
     }
-    
-    /* Card & Stats mobile tweaks */
-    .stat-card { padding: 14px; }
-    .stat-value { font-size: 1.5rem; }
-    
-    /* Demo banner mobile */
-    .demo-banner { font-size: 0.78rem; padding: 10px 12px; }
+
+    /* ---- Tables → card-like rows on mobile ---- */
+    .toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
+    .toolbar-left, .toolbar-right { width: 100%; flex-wrap: wrap; }
+    .search-input-wrapper input { width: 100%; }
+    .search-input-wrapper input:focus { width: 100%; }
+    .task-row { flex-wrap: wrap; gap: 8px; }
+
+    /* ---- Program Detail ---- */
+    .program-detail-title-row { flex-direction: column; gap: 10px; }
+    .program-quick-stats { flex-direction: column; gap: 8px; }
+
+    /* ---- Staff task rows ---- */
+    .staff-task-main { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+    .staff-task-actions .btn { font-size: 0.78rem; padding: 5px 10px; }
+
+    /* ---- Tabs ---- */
+    .tabs { width: 100%; overflow-x: auto; }
+    .tab { font-size: 0.8rem; padding: 8px 12px; white-space: nowrap; }
+
+    /* ---- Modals ---- */
+    .modal { margin: 12px; max-height: 90vh; }
+
+    /* ---- Toast ---- */
+    .toast-container { left: 10px; right: 10px; bottom: 80px; }
+    .toast { font-size: 0.82rem; padding: 10px 14px; }
+
+    /* ---- Dropdown positions ---- */
+    .notification-dropdown { right: -60px; }
+
+    /* ---- Bottom nav safe area ---- */
+    .main-content { padding-bottom: 80px; }
 }
 
+/* ---- Very small phones (< 480px) ---- */
 @media (max-width: 480px) {
-    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .main-content { padding: 10px 10px 80px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-card { padding: 12px; }
+    .stat-value { font-size: 1.35rem; }
     .gallery-grid { grid-template-columns: 1fr 1fr; }
     .score-grid { grid-template-columns: repeat(2, 1fr); }
-    .tabs { width: 100%; }
-    .tab { flex: 1; justify-content: center; font-size: 0.8rem; }
-    .page-actions { flex-direction: column; width: 100%; }
-    .page-actions .btn { width: 100%; }
-    
-    /* Login extra small */
-    .login-form-panel { padding: 20px 14px; }
-    .login-form-header h2 { font-size: 1.35rem; }
-    .mobile-brand-title { font-size: 1.5rem; }
-    .demo-banner code { word-break: break-all; }
-    
-    /* Make stat cards 1 col for very small phones */
-    .stats-grid { grid-template-columns: 1fr; }
+    .page-title { font-size: 1.1rem; }
+
+    /* Tighter cards */
+    .card-header { padding: 12px 14px; gap: 8px; }
+    .card-header h3 { font-size: 0.88rem; }
+    .card-body { padding: 12px 14px; }
+
+    /* Activity & transfer rows */
+    .activity-item { gap: 10px; padding: 8px 0; }
+    .activity-icon { width: 28px; height: 28px; font-size: 11px; }
+    .activity-text { font-size: 0.78rem; }
+
+    /* Staff task rows */
+    .staff-task-title { font-size: 0.84rem; }
+    .staff-task-meta { gap: 4px; }
+
+    /* Notification dropdown full-width on tiny phones */
+    .notification-dropdown {
+        width: 100vw;
+        right: 0;
+        left: 0;
+        border-radius: 12px 12px 0 0;
+        bottom: 0;
+        top: auto;
+        position: fixed;
+        max-height: 70vh;
+    }
+    .user-dropdown { width: min(240px, 90vw); }
+
+    /* Modals */
+    .modal { margin: 8px; border-radius: 16px; }
+    .modal-header { padding: 16px; }
+    .modal-body { padding: 16px; }
+    .modal-footer { padding: 12px 16px; }
+
+    /* Toast */
+    .toast-container { left: 8px; right: 8px; bottom: 76px; }
 }
+
+/* ---- Bottom safe area for PWA / gesture navigation ---- */
+@media (max-width: 1024px) {
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+        .main-content {
+            padding-bottom: calc(80px + env(safe-area-inset-bottom));
+        }
+    }
+}
+
 
 /* ============================================================
    SPLASH SCREEN

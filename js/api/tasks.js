@@ -93,6 +93,67 @@ export async function fetchActivityLogs(limit = 15) {
 }
 
 // ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+/**
+ * Fetch notifikasi dari Supabase untuk user yang sedang login
+ * dan populate ke store agar header bisa menampilkannya
+ */
+export async function fetchNotifications(limit = 20) {
+    const user = store.get('user');
+    if (!user) return { data: [], error: null };
+    
+    if (APP_CONFIG.demoMode) {
+        await delay(200);
+        const notifications = store.get('notifications') || [];
+        // Filter hanya notif untuk user ini
+        const myNotifs = notifications.filter(n => !n.user_id || n.user_id === user.id);
+        return { data: myNotifs, error: null };
+    }
+    
+    try {
+        const { data, error } = await getDB()
+            .from('notifications')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+        
+        if (!error && data) {
+            // Merge dengan notifikasi lokal yang mungkin ada
+            const localNotifs = (store.get('notifications') || []).filter(n => 
+                !n.user_id || n.user_id === user.id
+            );
+            
+            // Gabungkan: DB notifs + lokal yang belum ada di DB (berdasarkan id)
+            const dbIds = new Set(data.map(n => n.id));
+            const uniqueLocal = localNotifs.filter(n => !dbIds.has(n.id));
+            const merged = [...data, ...uniqueLocal].sort(
+                (a, b) => new Date(b.created_at) - new Date(a.created_at)
+            );
+            
+            const unread = merged.filter(n => !n.is_read).length;
+            store.set({ 
+                notifications: merged, 
+                unreadNotifications: unread 
+            });
+            
+            return { data: merged, error: null };
+        }
+        
+        return { data: data || [], error };
+    } catch (err) {
+        console.warn('fetchNotifications error:', err);
+        // Fallback ke store lokal
+        const notifications = (store.get('notifications') || []).filter(n => 
+            !n.user_id || n.user_id === user.id
+        );
+        return { data: notifications, error: null };
+    }
+}
+
+// ============================================================
 // FETCH
 // ============================================================
 
@@ -337,19 +398,21 @@ export async function submitTransferRequest(taskId, ownerId, reason) {
         requests = [newReq, ...requests];
         store.set({ transfer_requests: requests });
         
-        // Buat notifikasi
+        // Buat notifikasi untuk OWNER (bukan requester)
         const notifs = store.get('notifications') || [];
         const newNotif = {
             id: `notif-${Date.now()}`,
             type: 'warning',
             title: 'Permintaan Pergantian Tugas',
             message: `${user.full_name} mengajukan pergantian tugas untuk "${taskTitle}".`,
+            user_id: ownerId, // Penting: notifikasi hanya untuk owner tugas
             created_at: new Date().toISOString(),
             is_read: false
         };
         store.set({ 
             notifications: [newNotif, ...notifs],
-            unreadNotifications: (store.get('unreadNotifications') || 0) + 1
+            // Hanya increment jika user saat ini adalah owner (demo mode: bisa jadi user yang sama)
+            unreadNotifications: (store.get('unreadNotifications') || 0) + (ownerId === user.id ? 1 : 0)
         });
         
         return { data: newReq, error: null };
@@ -388,7 +451,10 @@ export async function submitTransferRequest(taskId, ownerId, reason) {
             };
             store.set({ transfer_requests: [fallbackReq, ...requests] });
             
-            // Buat notifikasi lokal
+            // Buat notifikasi lokal untuk OWNER
+            // Catatan: di real mode, notif lokal ini hanya berguna jika owner
+            // sedang online di session yang sama (unlikely). Tapi kita tetap simpan
+            // agar konsisten, dengan user_id ownerId agar tidak muncul di requester.
             const notifs = store.get('notifications') || [];
             const newNotif = {
                 id: `notif-${Date.now()}`,
@@ -401,7 +467,8 @@ export async function submitTransferRequest(taskId, ownerId, reason) {
             };
             store.set({ 
                 notifications: [newNotif, ...notifs],
-                unreadNotifications: (store.get('unreadNotifications') || 0) + 1
+                // Jangan increment badge di session requester — notif ini untuk owner
+                unreadNotifications: (store.get('unreadNotifications') || 0) + (ownerId === user.id ? 1 : 0)
             });
             
             return { data: fallbackReq, error: null }; // Return sukses dengan fallback
@@ -412,12 +479,13 @@ export async function submitTransferRequest(taskId, ownerId, reason) {
             const taskTitle = store.get('tasks').find(t => t.id === taskId)?.title || 'Task';
             await getDB().from('notifications').insert({
                 user_id: ownerId,
-                type: 'warning',
+                type: 'task', // Harus sesuai enum notification_type (task/program/deadline/system/mention)
                 title: 'Permintaan Pergantian Tugas',
                 message: `${user.full_name} mengajukan pergantian tugas untuk "${taskTitle}".`,
                 resource_type: 'task',
                 resource_id: taskId,
                 action_url: '#/dashboard',
+                sent_by: user.id, // Diperlukan oleh RLS policy notifications_send_admin
                 is_read: false
             });
         } catch (notifErr) {
@@ -442,7 +510,8 @@ export async function fetchTransferRequests() {
         const { data, error } = await getDB()
             .from('task_transfer_requests')
             .select('*, tasks(title), requester:profiles!requester_id(full_name, avatar_url), owner:profiles!owner_id(full_name)')
-            .eq('status', 'pending');
+            .order('created_at', { ascending: false })
+            .limit(20);
         
         // Merge dengan request lokal (fallback) jika ada
         const localRequests = (store.get('transfer_requests') || []).filter(r => r._local);
@@ -466,6 +535,15 @@ export async function updateTransferRequestStatus(requestId, taskId, newOwnerId,
         if (status === 'approved') {
             await updateTask(taskId, { assigned_to: newOwnerId, _silent: true });
         }
+        
+        // Hapus notif lokal
+        const notifs = store.get('notifications') || [];
+        const filteredNotifs = notifs.filter(n => !(n.title === 'Permintaan Pergantian Tugas' && n.message.includes(`"${store.get('tasks').find(t => t.id === taskId)?.title || ''}"`)));
+        store.set({
+            notifications: filteredNotifs,
+            unreadNotifications: filteredNotifs.filter(n => !n.is_read).length
+        });
+        
         return { error: null };
     }
     
@@ -478,6 +556,15 @@ export async function updateTransferRequestStatus(requestId, taskId, newOwnerId,
         if (status === 'approved') {
             await updateTask(taskId, { assigned_to: newOwnerId, _silent: true });
         }
+        
+        // Hapus notif lokal
+        const notifs = store.get('notifications') || [];
+        const filteredNotifs = notifs.filter(n => !(n.title === 'Permintaan Pergantian Tugas' && n.message.includes(`"${store.get('tasks').find(t => t.id === taskId)?.title || ''}"`)));
+        store.set({
+            notifications: filteredNotifs,
+            unreadNotifications: filteredNotifs.filter(n => !n.is_read).length
+        });
+        
         return { error: null };
     }
     
@@ -490,8 +577,30 @@ export async function updateTransferRequestStatus(requestId, taskId, newOwnerId,
         .update(updates)
         .eq('id', requestId);
         
-    if (!error && status === 'approved') {
-        await getDB().from('tasks').update({ assigned_to: newOwnerId }).eq('id', taskId);
+    if (!error) {
+        if (status === 'approved') {
+            await getDB().from('tasks').update({ assigned_to: newOwnerId }).eq('id', taskId);
+        }
+        
+        // Hapus notifikasi terkait request ini
+        try {
+            await getDB()
+                .from('notifications')
+                .delete()
+                .eq('resource_type', 'task')
+                .eq('resource_id', taskId)
+                .eq('title', 'Permintaan Pergantian Tugas');
+        } catch (err) {
+            console.error('Failed to remove notification', err);
+        }
+        
+        // Hapus juga dari local store agar UI langsung terupdate
+        const notifs = store.get('notifications') || [];
+        const filteredNotifs = notifs.filter(n => !(n.title === 'Permintaan Pergantian Tugas' && n.message.includes(`"${store.get('tasks').find(t => t.id === taskId)?.title || ''}"`)));
+        store.set({
+            notifications: filteredNotifs,
+            unreadNotifications: filteredNotifs.filter(n => !n.is_read).length
+        });
     }
     
     return { error };

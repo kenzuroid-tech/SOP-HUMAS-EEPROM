@@ -8,6 +8,7 @@ import { navigate } from '../router.js';
 import { toggleMobileSidebar } from './sidebar.js';
 import { formatRelativeTime, getInitials, stringToColor } from '../utils.js';
 import { logout } from '../auth.js';
+import { fetchNotifications } from '../api/tasks.js';
 
 // ============================================================
 // HEADER RENDER
@@ -107,8 +108,32 @@ export function renderHeader() {
     // Init icons
     if (window.lucide) lucide.createIcons({ nodes: [header] });
     
-    // Render notifikasi
+    // Render notifikasi (dari store lokal dulu)
     renderNotifications();
+    
+    // Fetch notifikasi dari Supabase (async, akan update store lalu re-render)
+    fetchNotifications().then(() => {
+        renderNotifications();
+        // Update badge counter tanpa re-render seluruh header
+        const badge = document.querySelector('.notif-badge');
+        const unread = store.get('unreadNotifications') || 0;
+        const notifBtn = document.getElementById('notif-btn');
+        if (notifBtn) {
+            const existingBadge = notifBtn.querySelector('.notif-badge');
+            if (unread > 0) {
+                if (existingBadge) {
+                    existingBadge.textContent = unread > 9 ? '9+' : unread;
+                } else {
+                    const span = document.createElement('span');
+                    span.className = 'notif-badge';
+                    span.textContent = unread > 9 ? '9+' : unread;
+                    notifBtn.appendChild(span);
+                }
+            } else if (existingBadge) {
+                existingBadge.remove();
+            }
+        }
+    });
     
     // Event listeners
     setupHeaderEvents(header);
